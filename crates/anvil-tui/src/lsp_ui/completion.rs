@@ -313,10 +313,14 @@ impl Model {
             return;
         }
         let snippet_active = self.language.completion.snippet.is_some();
+        let callable = insert.contains('(');
         self.status.text = format!("completed {label}");
         self.file.dirty = true;
         if !snippet_active {
             self.auto_completion();
+        }
+        if callable && self.language.completion.completion.is_none() {
+            self.request_signature_help(None);
         }
     }
 
@@ -468,6 +472,7 @@ impl Model {
                 .get(completion.selected)
                 .and_then(|index| completion.items.get(*index))
                 .map(|item| item.label.clone());
+            let empty_query = query.is_empty();
             let items = &completion.items;
             let mut filtered = (0..items.len())
                 .filter_map(|index| {
@@ -475,6 +480,12 @@ impl Model {
                 })
                 .collect::<Vec<_>>();
             filtered.sort_by(|(left, left_score), (right, right_score)| {
+                if empty_query {
+                    return items[*left]
+                        .sort_text
+                        .cmp(&items[*right].sort_text)
+                        .then_with(|| items[*left].label.cmp(&items[*right].label));
+                }
                 left_score
                     .rank
                     .cmp(&right_score.rank)

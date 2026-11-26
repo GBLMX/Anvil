@@ -92,6 +92,11 @@ post-`0.5.0` feature line.
   of the viewport instead of opening in the center of the editor.
 - Completion accepts apply `itemDefaults`, `InsertReplaceEdit` ranges, and
   replace text typed after the request instead of duplicating it.
+- Callable completion snippets keep argument placeholders inside `()`, accepting
+  one requests signature help, and server commit characters accept the selected
+  item instead of filtering the list.
+- Completion and signature-help requests now advertise context support, send
+  `isRetrigger`, and keep the server's `sortText` order before the user types.
 
 ### Removed
 - `anvil-core` no longer exports benchmark-only `RopeBuffer`/`GapBuffer` or

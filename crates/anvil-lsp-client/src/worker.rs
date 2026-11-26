@@ -176,6 +176,7 @@ impl LspWorker {
                                 "dynamicRegistration": false
                             },
                             "completion": {
+                                "contextSupport": true,
                                 "completionItem": {
                                     "snippetSupport": true,
                                     "insertReplaceSupport": true,
@@ -191,6 +192,16 @@ impl LspWorker {
                                         "insertTextMode",
                                         "data"
                                     ]
+                                }
+                            },
+                            "signatureHelp": {
+                                "contextSupport": true,
+                                "signatureInformation": {
+                                    "documentationFormat": ["markdown", "plaintext"],
+                                    "parameterInformation": {
+                                        "labelOffsetSupport": true
+                                    },
+                                    "activeParameterSupport": true
                                 }
                             },
                             "semanticTokens": {

@@ -299,6 +299,9 @@ impl Model {
         let default_insert_format = defaults
             .and_then(|defaults| defaults.get("insertTextFormat"))
             .and_then(serde_json::Value::as_u64);
+        let default_commit_characters = defaults
+            .and_then(|defaults| defaults.get("commitCharacters"))
+            .cloned();
         let is_incomplete = result
             .get("isIncomplete")
             .and_then(serde_json::Value::as_bool)
@@ -353,6 +356,12 @@ impl Model {
                 let replace = text_edit
                     .and_then(completion_edit_range)
                     .or(default_edit_range);
+                let mut raw = item.clone();
+                if raw.get("commitCharacters").is_none()
+                    && let Some(characters) = &default_commit_characters
+                {
+                    raw["commitCharacters"] = characters.clone();
+                }
                 Some(CompletionItem {
                     source: anvil_session::provider::ProviderId::new("builtin.lsp"),
                     label,
@@ -365,7 +374,7 @@ impl Model {
                     replace,
                     replace_bytes: None,
                     documentation,
-                    raw: item.clone(),
+                    raw,
                     resolved: false,
                 })
             })

@@ -656,6 +656,29 @@ pub(super) fn completion_action(key: KeyPress, text_input: bool) -> CompletionAc
     }
 }
 
+fn completion_commit_character(model: &Model, character: char) -> bool {
+    let Some(completion) = model.language.completion.completion.as_ref() else {
+        return false;
+    };
+    let Some(item) = completion
+        .filtered
+        .get(completion.selected)
+        .and_then(|index| completion.items.get(*index))
+    else {
+        return false;
+    };
+    item.raw
+        .get("commitCharacters")
+        .and_then(serde_json::Value::as_array)
+        .is_some_and(|characters| {
+            characters.iter().any(|value| {
+                value
+                    .as_str()
+                    .is_some_and(|value| value == character.to_string())
+            })
+        })
+}
+
 pub(super) fn execute_completion_action(model: &mut Model, action: CompletionAction) -> bool {
     match action {
         CompletionAction::Previous => model.move_completion(-1),
@@ -671,6 +694,12 @@ pub(super) fn execute_completion_action(model: &mut Model, action: CompletionAct
             model.request_completion_more();
         }
         CompletionAction::Insert(character) => {
+            if completion_commit_character(model, character) {
+                model.apply_completion();
+                model.insert_text(&character.to_string());
+                model.cancel_completion();
+                return true;
+            }
             if let Some(completion) = model.language.completion.completion.as_mut() {
                 completion.query.push(character);
             }

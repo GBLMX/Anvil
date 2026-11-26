@@ -226,7 +226,8 @@ impl Model {
         self.file.dirty = true;
     }
 
-    pub(crate) fn request_signature_help(&mut self, trigger: char) {
+    pub(crate) fn request_signature_help(&mut self, trigger: Option<char>) {
+        let is_retrigger = self.overlays.lsp_results.signature_help.is_some();
         self.cancel_completion();
         self.cancel_code_actions();
         self.cancel_document_symbols();
@@ -244,10 +245,21 @@ impl Model {
         let Some((line, character)) = self.lsp_position() else {
             return;
         };
+        let context = match trigger {
+            Some(trigger) => serde_json::json!({
+                "triggerKind": 2,
+                "triggerCharacter": trigger.to_string(),
+                "isRetrigger": is_retrigger
+            }),
+            None => serde_json::json!({
+                "triggerKind": 1,
+                "isRetrigger": is_retrigger
+            }),
+        };
         let params = serde_json::json!({
             "textDocument": {"uri": uri},
             "position": {"line": line, "character": character},
-            "context": {"triggerKind": 2, "triggerCharacter": trigger.to_string()}
+            "context": context
         });
         if self.send_lsp_request(
             LspRequestKind::SignatureHelp,

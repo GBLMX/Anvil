@@ -118,7 +118,7 @@ impl Model {
             .last()
             .filter(|character| matches!(character, '(' | ','))
         {
-            self.request_signature_help(trigger);
+            self.request_signature_help(Some(trigger));
         }
     }
 
