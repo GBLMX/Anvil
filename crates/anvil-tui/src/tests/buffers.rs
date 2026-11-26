@@ -2004,3 +2004,36 @@ fn split_undo_uses_shared_history() {
     assert_eq!(split.buffer.editor.text().slice(0..3), "one");
     assert_eq!(model.session.editor.text().slice(0..3), "one");
 }
+
+#[test]
+fn split_sync_preserves_view_selection_and_viewport() {
+    let mut model = Model::new(EditorState::from_text("one"), None);
+    model.split_vertical();
+    let viewport = anvil_api::Viewport {
+        first_line: 2,
+        first_column: 1,
+        line_count: 10,
+        width: 80,
+        height: 20,
+    };
+    {
+        let pane = model.buffers.split.as_mut().expect("split");
+        assert!(
+            pane.buffer
+                .document
+                .editor
+                .try_set_selection_bytes(1, 2)
+                .is_ok()
+        );
+        pane.buffer.document.editor.set_viewport(viewport);
+    }
+
+    handle_event(&mut model, key(KeyCode::Char('i')));
+    type_text(&mut model, "X");
+    handle_event(&mut model, key(KeyCode::Esc));
+
+    let split = model.buffers.split.as_ref().expect("split");
+    assert_eq!(split.buffer.document.editor.selection_bytes(), vec![(1, 2)]);
+    assert_eq!(split.buffer.document.editor.viewport(), viewport);
+    assert_eq!(split.buffer.editor.text().slice(0..4), "Xone");
+}

@@ -18,9 +18,28 @@ impl Model {
         if pane.buffer.id != self.buffers.active_id {
             return;
         }
+        let selections = pane.buffer.document.editor.selection_bytes();
+        let viewport = pane.buffer.document.editor.viewport();
+        let interaction_mode = pane.buffer.document.editor.interaction_mode();
+        let fallback_cursor = pane.buffer.cursor;
+        let mut editor = self.session.editor.clone();
+        let length = editor.text().len_bytes();
+        let selections = selections
+            .into_iter()
+            .map(|(anchor, head)| (anchor.min(length), head.min(length)))
+            .collect();
+        if editor.try_set_selections_bytes(selections).is_err() {
+            let mut cursor = fallback_cursor.min(length);
+            while cursor > 0 && editor.try_set_selection_bytes(cursor, cursor).is_err() {
+                cursor -= 1;
+            }
+            let _ = editor.try_set_selection_bytes(cursor, cursor);
+        }
+        editor.set_viewport(viewport);
+        editor.set_interaction_mode(interaction_mode);
         pane.buffer.document = Document {
             id: self.buffers.active_id,
-            editor: self.session.editor.clone(),
+            editor,
             path: self.session.path.clone(),
             modified: self.file.modified,
             missing: self.file.missing,
