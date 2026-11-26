@@ -221,6 +221,10 @@ impl Model {
             if request.kind == LspRequestKind::CompletionResolve {
                 self.language.completion.resolve = None;
             }
+            if request.kind == LspRequestKind::InlineCompletion {
+                self.language.completion.inline = None;
+                self.language.completion.inline_request = None;
+            }
             if request.kind == LspRequestKind::StickySymbols {
                 self.overlays.lsp_results.sticky_pending = false;
                 self.file.dirty = true;
@@ -261,7 +265,8 @@ impl Model {
                 self.apply_completion_resolve_response(id, &result);
             }
             LspRequestKind::InlineCompletion => {
-                self.apply_inline_completion_response(&result);
+                let request = self.language.completion.inline_request.take();
+                self.apply_inline_completion_response(&result, request);
             }
             LspRequestKind::Definition => self.apply_goto_response(&result, "definition"),
             LspRequestKind::Declaration => self.apply_goto_response(&result, "declaration"),
@@ -548,7 +553,22 @@ impl Model {
         self.file.dirty = true;
     }
 
-    fn apply_inline_completion_response(&mut self, result: &serde_json::Value) {
+    fn apply_inline_completion_response(
+        &mut self,
+        result: &serde_json::Value,
+        request: Option<(u64, usize, Option<PathBuf>)>,
+    ) {
+        let Some((revision, cursor, path)) = request else {
+            self.language.completion.inline = None;
+            return;
+        };
+        if revision != self.session.editor.revision()
+            || cursor != self.session.cursor
+            || path != self.session.path
+        {
+            self.language.completion.inline = None;
+            return;
+        }
         if !matches!(self.ui.input_mode, InputMode::Insert)
             || self.language.completion.completion.is_some()
             || self.language.completion.snippet.is_some()

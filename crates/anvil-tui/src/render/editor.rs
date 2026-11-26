@@ -222,6 +222,7 @@ pub fn view(model: &Model, frame: &mut Frame) {
         && matches!(model.ui.input_mode, InputMode::Insert)
         && inline.revision == model.session.editor.revision()
         && inline.cursor == model.session.cursor
+        && inline.path == model.session.path
     {
         let text = model.session.editor.text();
         let rest = text.slice(inline.cursor..text.len_bytes());

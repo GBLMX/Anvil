@@ -2406,6 +2406,7 @@ fn inline_completion_response_replaces_its_range() {
         .lsp_requests
         .pending
         .insert(41, LspRequestKind::InlineCompletion);
+    model.language.completion.inline_request = Some((model.session.editor.revision(), 3, None));
     model.handle_lsp_response(
         41,
         serde_json::json!({
@@ -2423,6 +2424,41 @@ fn inline_completion_response_replaces_its_range() {
     assert!(model.apply_inline_completion());
     let text = model.session.editor.text();
     assert_eq!(text.slice(0..text.len_bytes()), "println");
+    assert!(model.language.completion.inline.is_none());
+}
+
+#[test]
+fn stale_inline_completion_response_is_ignored() {
+    let mut model = Model::new(EditorState::from_text("pri"), None);
+    model.ui.input_mode = InputMode::Insert;
+    model.session.cursor = 3;
+    model
+        .language
+        .lsp_requests
+        .pending
+        .insert(42, LspRequestKind::InlineCompletion);
+    model.language.completion.inline_request = Some((model.session.editor.revision(), 3, None));
+    model.session.cursor = 1;
+    model.handle_lsp_response(
+        42,
+        serde_json::json!({"items": [{"insertText": "println"}]}),
+        None,
+    );
+    assert!(model.language.completion.inline.is_none());
+
+    model.session.cursor = 3;
+    model
+        .language
+        .lsp_requests
+        .pending
+        .insert(43, LspRequestKind::InlineCompletion);
+    model.language.completion.inline_request = Some((model.session.editor.revision(), 3, None));
+    let _ = model.session.editor.try_insert(3, "x");
+    model.handle_lsp_response(
+        43,
+        serde_json::json!({"items": [{"insertText": "println"}]}),
+        None,
+    );
     assert!(model.language.completion.inline.is_none());
 }
 

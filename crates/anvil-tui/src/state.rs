@@ -1301,7 +1301,8 @@ pub(crate) struct CompletionUiState {
     pub(crate) keyword_signature: Option<(u64, usize)>,
     /// Latest inline completion for the cursor, rendered as ghost text.
     pub(crate) inline: Option<InlineCompletionState>,
-    /// Whether the last completion list was truncated and must be re-requested.
+    /// Revision, cursor, and path captured when inline completion was sent.
+    pub(crate) inline_request: Option<(u64, usize, Option<PathBuf>)>,
     /// Scroll offset for the completion documentation side panel.
     pub(crate) documentation_scroll: usize,
     pub(crate) incomplete: bool,
