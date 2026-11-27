@@ -120,9 +120,12 @@ The earlier full-`Clone` measurement was a proxy and is not used for the
 snapshot hard gate.
 
 The PR gate reruns the 10 MB probe against `origin/main` in a second worktree
-on the same runner and fails if any workload's p99 regresses by more than 10%;
-workloads with a baseline p99 below 10 µs are skipped as timer noise.
-The 100 MB run remains a manual reference measurement.
+on the same runner and compares the minimum p50 across three runs; it fails
+when a workload regresses by more than 10% and by more than 100 µs
+([ADR-0081](../adr/0081-stable-pr-benchmark-gate.md)). p95/p99 remain in the
+CSV and are measured on controlled runs. Workloads with a baseline p50 below
+10 µs are skipped as timer noise. The 100 MB run remains a manual reference
+measurement.
 
 ## Interpretation limits
 

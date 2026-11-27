@@ -150,6 +150,7 @@
 - [ADR-0078: Gateway Authorization Scopes, Trust Sources, and Audit](adr/0078-gateway-authorization-scopes-and-audit.md)
 - [ADR-0079: Document and View Ownership for TUI Buffers](adr/0079-document-view-ownership-for-tui-buffers.md)
 - [ADR-0080: Release Cadence and Synchronization](adr/0080-release-cadence-and-synchronization.md)
+- [ADR-0081: Stable PR Text Benchmark Gate](adr/0081-stable-pr-benchmark-gate.md)
 
 # History
 

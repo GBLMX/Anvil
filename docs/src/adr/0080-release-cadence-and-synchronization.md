@@ -1,9 +1,9 @@
 # `ADR-0080`: Release Cadence and Synchronization
 
-- Status: Accepted
+- Status: Accepted; PR benchmark gate amended by ADR-0081
 - Version: 1.0.0
 - Date: 2026-11-26
-- Related: ADR-0014, ADR-0021, ADR-0060, ADR-0077; `GOVERNANCE.md`,
+- Related: ADR-0014, ADR-0021, ADR-0060, ADR-0077, ADR-0081; `GOVERNANCE.md`,
   `docs/src/RELEASE.md`, `docs/src/ROADMAP.md`
 - Supersedes:
 - Superseded by:
@@ -28,7 +28,9 @@ gates:
   binding checks guard public contracts.
 - `scripts/docs-check.py` guards links, anchors, chapters, plan locations, and
   the root documentation budget.
-- The PR benchmark job rejects text p99 regressions above 10%.
+- The PR benchmark job rejects text p50 regressions above 10% plus a 100 µs
+  absolute delta; p95/p99 remain reported and are measured on controlled runs
+  (ADR-0081).
 
 What is missing is the cycle around them: a freeze policy, a support window,
 scheduled dependency drift checks, per-PR changelog enforcement, a scripted

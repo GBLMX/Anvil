@@ -15,7 +15,7 @@ their decision sections.
 | [0007](0007-jsonrpc-envelope-and-capability-token.md) | JSON-RPC envelope and capability token | Accepted; implemented |
 | [0008](0008-selection-first-interaction.md) | Selection-first interaction model | Accepted |
 | [0009](0009-text-model-snapshot-gate.md) | Text model snapshot gate and backend | Accepted |
-| [0010](0010-cursor-and-snapshot-ownership.md) | Core owns coordinates; editor owns snapshots | Accepted |
+| [0010](0010-cursor-and-snapshot-ownership.md) | Core owns coordinates; editor owns snapshots | Accepted; PR text benchmark gate amended by ADR-0081 |
 | [0011](0011-workspace-chunked-file-io.md) | Workspace-scoped chunked file I/O | Accepted; implemented |
 | [0012](0012-plugin-host-isolation.md) | Plugin-host isolation | Accepted; implemented |
 | [0013](0013-kernel-distribution-boundary.md) | Rust kernel and distribution boundary | Accepted; baseline in ADR-0037 |
@@ -85,7 +85,8 @@ their decision sections.
 | [0077](0077-benchmark-only-text-backends.md) | Benchmark-only text backends | Accepted; implemented 2026-11-24 |
 | [0078](0078-gateway-authorization-scopes-and-audit.md) | Gateway authorization scopes, trust sources, and audit | Proposed |
 | [0079](0079-document-view-ownership-for-tui-buffers.md) | Document and view ownership for TUI buffers | Accepted; document metadata wrapper implemented 2026-11-26; shared document store pending |
-| [0080](0080-release-cadence-and-synchronization.md) | Release cadence, freeze policy, and synchronization rails | Accepted |
+| [0080](0080-release-cadence-and-synchronization.md) | Release cadence, freeze policy, and synchronization rails | Accepted; PR benchmark gate amended by ADR-0081 |
+| [0081](0081-stable-pr-benchmark-gate.md) | Stable PR text benchmark gate | Accepted; implemented 2026-11-27 |
 
 ## Numbering Rule
 

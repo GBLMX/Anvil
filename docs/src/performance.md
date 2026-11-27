@@ -39,8 +39,9 @@ Performance is re-run at dependency boundaries, not after every commit.
 | Any release tag | Full gates in this document |
 
 Absolute gates run only on the reference machine. Shared CI may run relative
-regressions; a p99 regression over 10% with at least 30 samples fails the gate.
-Security tests are never waived for performance.
+regressions; the PR text-model gate compares p50 and requires both a >10%
+change and a >100 µs delta (ADR-0081). Controlled p99 gates still fail above
+10% with at least 30 samples. Security tests are never waived for performance.
 
 ## 1.2 Early-code optimization policy
 
@@ -267,8 +268,11 @@ Opt-in profile-guided optimization is documented under
 - Shared CI runners may run correctness tests and relative regressions.
 - Absolute latency gates run on the reference runner.
 - A performance regression fails CI when:
-  - the change is statistically significant over at least 30 samples, and
-  - p99 regresses by more than 10% against the recorded baseline.
+  - the agreed PR regression statistic changes by more than 10% with a
+    statistically meaningful sample, and
+  - the text-model PR gate additionally exceeds a 100 µs absolute delta
+    (ADR-0081).
+- Controlled p99 gates remain authoritative for tail latency.
 - Security tests are never waived for performance.
 - A benchmark that cannot run on the current machine is reported as skipped,
   not silently passed.
