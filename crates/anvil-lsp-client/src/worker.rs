@@ -17,14 +17,16 @@ const LSP_COMMAND_CAPACITY: usize = 1024;
 const LSP_EVENT_CAPACITY: usize = 1024;
 const LSP_SHUTDOWN: Duration = Duration::from_millis(250);
 
-struct LspCapabilities {
-    inlay_hints: bool,
-    semantic_token_types: Vec<String>,
-    completion_trigger_characters: Vec<String>,
-    completion_all_commit_characters: Vec<String>,
-    signature_help_trigger_characters: Vec<String>,
-    signature_help_retrigger_characters: Vec<String>,
-    server_info: Option<String>,
+/// Capabilities advertised by a language server during initialize.
+#[derive(Clone, Debug)]
+pub struct LspCapabilities {
+    pub inlay_hints: bool,
+    pub semantic_token_types: Vec<String>,
+    pub completion_trigger_characters: Vec<String>,
+    pub completion_all_commit_characters: Vec<String>,
+    pub signature_help_trigger_characters: Vec<String>,
+    pub signature_help_retrigger_characters: Vec<String>,
+    pub server_info: Option<String>,
 }
 
 #[derive(Debug)]
@@ -38,10 +40,6 @@ pub enum LspEvent {
     Capabilities {
         inlay_hints: bool,
         semantic_token_types: Vec<String>,
-        completion_trigger_characters: Vec<String>,
-        completion_all_commit_characters: Vec<String>,
-        signature_help_trigger_characters: Vec<String>,
-        signature_help_retrigger_characters: Vec<String>,
         server_info: Option<String>,
     },
     Crashed(String),
@@ -89,6 +87,7 @@ pub struct LspWorker {
     commands: SyncSender<LspCommand>,
     diagnostics: Arc<Mutex<HashMap<PathBuf, Vec<Diagnostic>>>>,
     overflow_responses: Arc<Mutex<HashMap<u64, String>>>,
+    capabilities: Arc<Mutex<Option<LspCapabilities>>>,
     root: PathBuf,
     settings: Value,
 }
@@ -101,6 +100,14 @@ impl LspWorker {
 
     pub fn settings(&self) -> Value {
         self.settings.clone()
+    }
+
+    /// Capabilities captured during initialize, when the handshake succeeded.
+    pub fn capabilities(&self) -> Option<LspCapabilities> {
+        self.capabilities
+            .lock()
+            .ok()
+            .and_then(|capabilities| capabilities.clone())
     }
 
     pub fn start(
@@ -133,6 +140,8 @@ impl LspWorker {
         let worker_diagnostics = Arc::clone(&diagnostics);
         let overflow_responses = Arc::new(Mutex::new(HashMap::new()));
         let worker_overflow = Arc::clone(&overflow_responses);
+        let capabilities = Arc::new(Mutex::new(None));
+        let worker_capabilities = Arc::clone(&capabilities);
         let mut group = TaskGroup::with_config(group_config);
         let spawn = group.spawn("lsp", move |context| {
             let relative_root = root
@@ -234,15 +243,7 @@ impl LspWorker {
                 let _ = send_lsp_event(&context, &worker_overflow, LspEvent::Crashed(error));
                 return Ok(());
             }
-            let LspCapabilities {
-                inlay_hints,
-                semantic_token_types,
-                completion_trigger_characters,
-                completion_all_commit_characters,
-                signature_help_trigger_characters,
-                signature_help_retrigger_characters,
-                server_info,
-            } = match wait_initialize(&mut client, &root, &current_settings) {
+            let capabilities = match wait_initialize(&mut client, &root, &current_settings) {
                 Ok(capabilities) => capabilities,
                 Err(error) => {
                     let _ =
@@ -250,17 +251,16 @@ impl LspWorker {
                     return Ok(());
                 }
             };
+            if let Ok(mut stored) = worker_capabilities.lock() {
+                *stored = Some(capabilities.clone());
+            }
             let _ = send_lsp_event(
                 &context,
                 &worker_overflow,
                 LspEvent::Capabilities {
-                    inlay_hints,
-                    semantic_token_types,
-                    completion_trigger_characters,
-                    completion_all_commit_characters,
-                    signature_help_trigger_characters,
-                    signature_help_retrigger_characters,
-                    server_info,
+                    inlay_hints: capabilities.inlay_hints,
+                    semantic_token_types: capabilities.semantic_token_types.clone(),
+                    server_info: capabilities.server_info.clone(),
                 },
             );
             let initialized = serde_json::json!({
@@ -447,6 +447,7 @@ impl LspWorker {
                 diagnostics,
                 overflow_responses,
                 root: worker_root,
+                capabilities,
                 settings: worker_settings,
             }),
             Err(error) => Err(format!("lsp thread failed: {error}")),
@@ -882,6 +883,7 @@ mod tests {
             commands,
             diagnostics: Arc::new(Mutex::new(HashMap::new())),
             overflow_responses: Arc::new(Mutex::new(HashMap::new())),
+            capabilities: Arc::new(Mutex::new(None)),
             root: PathBuf::from("/tmp"),
             settings: Value::Null,
         };
@@ -1141,26 +1143,24 @@ mod tests {
         loop {
             for event in worker.poll() {
                 match event {
-                    LspEvent::Capabilities {
-                        completion_trigger_characters,
-                        completion_all_commit_characters,
-                        signature_help_trigger_characters,
-                        signature_help_retrigger_characters,
-                        ..
-                    } => {
+                    LspEvent::Capabilities { .. } => {
+                        let capabilities = worker.capabilities().expect("capabilities");
                         assert_eq!(
-                            completion_trigger_characters,
+                            capabilities.completion_trigger_characters,
                             vec![".".to_owned(), "::".to_owned()]
                         );
                         assert_eq!(
-                            completion_all_commit_characters,
+                            capabilities.completion_all_commit_characters,
                             vec![")".to_owned(), ";".to_owned()]
                         );
                         assert_eq!(
-                            signature_help_trigger_characters,
+                            capabilities.signature_help_trigger_characters,
                             vec!["(".to_owned(), ",".to_owned()]
                         );
-                        assert_eq!(signature_help_retrigger_characters, vec![",".to_owned()]);
+                        assert_eq!(
+                            capabilities.signature_help_retrigger_characters,
+                            vec![",".to_owned()]
+                        );
                         saw_capabilities = true;
                     }
                     LspEvent::Diagnostics(path, diagnostics) => {

@@ -10,4 +10,4 @@ pub use lsp::{
 pub use settings::{
     LspSettings, ToolSource, find_tool_path, lsp_settings, lsp_settings_with_service,
 };
-pub use worker::{LspCommand, LspConfig, LspEvent, LspWorker, file_uri};
+pub use worker::{LspCapabilities, LspCommand, LspConfig, LspEvent, LspWorker, file_uri};
