@@ -89,15 +89,17 @@ jobs:
           from pathlib import Path
           import sys
 
+          # Shared runners cannot measure p99 reliably; compare the median for
+          # PR gating while the CSV keeps p95/p99 for product benchmarks.
           def read(pattern):
               rows = {}
               for path in sorted(Path("/tmp").glob(pattern)):
                   for line in path.read_text().splitlines():
                       if not line or line.startswith("backend,"):
                           continue
-                      backend, mb, workload, _p50, _p95, p99, _samples = line.split(",")
+                      backend, mb, workload, p50, _p95, _p99, _samples = line.split(",")
                       key = (backend, mb, workload)
-                      rows[key] = min(rows.get(key, float("inf")), float(p99))
+                      rows[key] = min(rows.get(key, float("inf")), float(p50))
               return rows
 
           base = read("base-p99-*.csv")
@@ -109,14 +111,14 @@ jobs:
                   failures.append(f"{key}: missing from PR run")
                   continue
               if before < 10_000:
-                  print(f"{key}: skipped (p99 < {before:.0f}ns)")
+                  print(f"{key}: skipped (p50 < {before:.0f}ns)")
                   continue
               delta = after - before
               ratio = after / before if before else float("inf")
               print(f"{key}: {ratio:.3f}x ({before:.0f}ns -> {after:.0f}ns)")
               if ratio > 1.10 and delta > 100_000:
                   failures.append(
-                      f"{key}: p99 regressed {ratio:.3f}x ({delta:.0f}ns)"
+                      f"{key}: p50 regressed {ratio:.3f}x ({delta:.0f}ns)"
                   )
               elif ratio > 1.10:
                   print(f"{key}: {delta:.0f}ns increase within noise floor")
