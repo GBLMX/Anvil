@@ -444,11 +444,14 @@ pub fn view(model: &Model, frame: &mut Frame) {
             );
         }
     }
-    if let (Some(split), Some(area)) = (&model.buffers.split, split_area) {
+    if let (Some(split), Some(area)) = (&model.buffers.split, split_area)
+        && let Some(document) = model.buffers.document(split.buffer.document)
+    {
         render_split_pane(
             frame,
             area,
             &split.buffer,
+            document,
             model.ui.focus.split,
             model.buffer_settings().soft_wrap,
             model.view.split_orientation == crate::state::SplitOrientation::Vertical,

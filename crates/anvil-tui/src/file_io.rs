@@ -25,11 +25,11 @@ impl Model {
             self.file.dirty = true;
             return Err("unnamed buffer is modified".to_owned());
         }
-        let existing = self
-            .buffers
-            .entries
-            .iter()
-            .position(|buffer| buffer.path.as_ref() == Some(&absolute));
+        let existing = self.buffers.entries.iter().position(|view| {
+            self.buffers
+                .document(view.document)
+                .is_some_and(|document| document.path.as_ref() == Some(&absolute))
+        });
         if existing.is_none() {
             self.ensure_buffer_capacity()?;
         }
@@ -50,12 +50,23 @@ impl Model {
             self.record_recent_file(&absolute);
             return Ok(());
         }
-        if let Some(mut buffer) = self.buffers.background.remove(&absolute) {
+        if let Some(document) = self.buffers.background.remove(&absolute) {
             if self.session.path.is_some() {
                 self.ensure_current_buffer();
             }
-            buffer.syntax = Default::default();
-            self.buffers.entries.push(buffer);
+            if let Some(document) = self.buffers.document_mut(document) {
+                document.syntax = Default::default();
+            }
+            self.buffers.entries.push(View {
+                id: ViewId::next(),
+                document,
+                cursor: 0,
+                scroll: 0,
+                hscroll: 0,
+                visual_anchor: None,
+                visual_line: false,
+                search_query: String::new(),
+            });
             let index = self.buffers.entries.len() - 1;
             self.load_buffer(index);
             self.sync_watch_paths();
@@ -69,22 +80,32 @@ impl Model {
         if self.session.path.is_some() {
             self.sync_active();
             if self.buffers.entries.is_empty() {
-                self.buffers.entries.push(self.snapshot());
+                let document = self.active_document_state();
+                self.buffers.documents.insert(document.id, document);
+                self.buffers.entries.push(self.active_view_state());
                 self.buffers.active = 0;
             }
-            self.buffers.entries.push(Buffer {
-                id: BufferId::next(),
-                editor: EditorState::from_text(&text).into(),
-                path: Some(absolute),
-                visual_anchor: None,
-                visual_line: false,
+            let document = DocumentId::next();
+            self.buffers.documents.insert(
+                document,
+                Document {
+                    id: document,
+                    session: EditorState::from_text(&text).into(),
+                    path: Some(absolute),
+                    modified: false,
+                    missing: false,
+                    syntax: Default::default(),
+                },
+            );
+            self.buffers.entries.push(View {
+                id: ViewId::next(),
+                document,
                 cursor: 0,
                 scroll: 0,
                 hscroll: 0,
-                modified: false,
-                missing: false,
+                visual_anchor: None,
+                visual_line: false,
                 search_query: String::new(),
-                syntax: Default::default(),
             });
             let index = self.buffers.entries.len() - 1;
             self.load_buffer(index);
@@ -231,18 +252,29 @@ impl Model {
         if let Some(path) = &self.session.path {
             open_paths.push(path.clone());
         }
-        for buffer in &self.buffers.entries {
-            if let Some(path) = &buffer.path {
+        for view in &self.buffers.entries {
+            if let Some(path) = self
+                .buffers
+                .document(view.document)
+                .and_then(|document| document.path.as_ref())
+            {
                 open_paths.push(path.clone());
             }
         }
-        for buffer in self.buffers.background.values() {
-            if let Some(path) = &buffer.path {
+        for id in self.buffers.background.values() {
+            if let Some(path) = self
+                .buffers
+                .document(*id)
+                .and_then(|document| document.path.as_ref())
+            {
                 open_paths.push(path.clone());
             }
         }
         if let Some(pane) = &self.buffers.split
-            && let Some(path) = &pane.buffer.path
+            && let Some(path) = self
+                .buffers
+                .document(pane.buffer.document)
+                .and_then(|document| document.path.as_ref())
         {
             open_paths.push(path.clone());
         }
@@ -334,20 +366,10 @@ impl Model {
         if self.session.path.as_deref().is_some_and(affected) {
             self.file.missing = true;
         }
-        for buffer in &mut self.buffers.entries {
-            if buffer.path.as_deref().is_some_and(affected) {
-                buffer.missing = true;
+        for document in self.buffers.documents.values_mut() {
+            if document.path.as_deref().is_some_and(affected) {
+                document.missing = true;
             }
-        }
-        for buffer in self.buffers.background.values_mut() {
-            if buffer.path.as_deref().is_some_and(affected) {
-                buffer.missing = true;
-            }
-        }
-        if let Some(pane) = self.buffers.split.as_mut()
-            && pane.buffer.path.as_deref().is_some_and(affected)
-        {
-            pane.buffer.missing = true;
         }
         self.file.dirty = true;
     }
@@ -365,44 +387,37 @@ impl Model {
             }
         };
         let cursor = self.session.cursor.min(text.len());
-        if self.session.path.as_deref() == Some(path) {
+        let active = self.session.path.as_deref() == Some(path);
+        if active {
             self.session.editor = EditorState::from_text(&text).into();
             self.session.cursor = cursor;
             self.file.modified = false;
             self.file.missing = false;
             self.syntax_cache.highlights.borrow_mut().invalidate();
-            self.sync_lsp_active();
         }
-        if let Some(buffer) = self
+        let ids = self
             .buffers
-            .entries
-            .iter_mut()
-            .find(|buffer| buffer.path.as_deref() == Some(path))
-        {
-            buffer.editor = EditorState::from_text(&text).into();
-            buffer.cursor = cursor.min(buffer.editor.text().len_bytes());
-            buffer.syntax = Default::default();
-            buffer.modified = false;
-            buffer.missing = false;
+            .documents
+            .values()
+            .filter(|document| document.path.as_deref() == Some(path))
+            .map(|document| document.id)
+            .collect::<Vec<_>>();
+        for id in ids {
+            if let Some(document) = self.buffers.document_mut(id) {
+                document.session = EditorState::from_text(&text).into();
+                document.syntax = Default::default();
+                document.modified = false;
+                document.missing = false;
+            }
         }
-        if let Some(buffer) = self.buffers.background.get_mut(path) {
-            buffer.editor = EditorState::from_text(&text).into();
-            buffer.cursor = cursor.min(buffer.editor.text().len_bytes());
-            buffer.syntax = Default::default();
-            buffer.modified = false;
-            buffer.missing = false;
+        for view in &mut self.buffers.entries {
+            view.cursor = view.cursor.min(text.len());
         }
-        if let Some(pane) = self.buffers.split.as_mut()
-            && pane.buffer.path.as_deref() == Some(path)
-        {
-            pane.buffer.editor = EditorState::from_text(&text).into();
-            pane.buffer.syntax = Default::default();
-            pane.buffer.cursor = cursor.min(pane.buffer.editor.text().len_bytes());
-            pane.buffer.modified = false;
-            pane.buffer.missing = false;
+        if let Some(pane) = self.buffers.split.as_mut() {
+            pane.buffer.cursor = pane.buffer.cursor.min(text.len());
         }
         self.sync_active();
-        if self.session.path.as_deref() == Some(path) {
+        if active {
             self.request_document_symbols_silent_if_runtime();
         }
         self.sync_watch_paths();
@@ -482,6 +497,12 @@ impl Model {
                 self.file.stdin_buffer = false;
                 self.file.modified = false;
                 self.file.missing = false;
+                if let Some(document) = self.buffers.active_document_mut() {
+                    document.session = self.session.editor.clone();
+                    document.path = self.session.path.clone();
+                    document.modified = false;
+                    document.missing = false;
+                }
                 self.mark_self_write(&path);
                 self.workspace.git.diff_checked = None;
                 self.workspace.git.diff_due = Some(Instant::now());
@@ -578,38 +599,47 @@ impl Model {
             failed = true;
         }
         let mut writes = Vec::new();
-        for (index, buffer) in self.buffers.entries.iter().enumerate() {
-            if !buffer.modified || buffer.path == active_path {
+        for view in &self.buffers.entries {
+            let Some(document) = self.buffers.document(view.document) else {
+                continue;
+            };
+            if !document.modified || document.path == active_path {
                 continue;
             }
-            let Some(path) = &buffer.path else {
+            let Some(path) = &document.path else {
                 self.status.text = "E: modified buffer has no file name".to_owned();
                 failed = true;
                 continue;
             };
-            let text = buffer
-                .editor
+            let text = document
+                .session
                 .text()
-                .slice(0..buffer.editor.text().len_bytes());
-            writes.push((index, path.clone(), text));
+                .slice(0..document.session.text().len_bytes());
+            writes.push((document.id, path.clone(), text));
         }
         let mut background_writes = Vec::new();
-        for (path, buffer) in &self.buffers.background {
-            if !buffer.modified || Some(path) == active_path.as_ref() {
+        for id in self.buffers.background.values() {
+            let Some(document) = self.buffers.document(*id) else {
+                continue;
+            };
+            let Some(path) = &document.path else {
+                continue;
+            };
+            if !document.modified || Some(path) == active_path.as_ref() {
                 continue;
             }
-            let text = buffer
-                .editor
+            let text = document
+                .session
                 .text()
-                .slice(0..buffer.editor.text().len_bytes());
-            background_writes.push((path.clone(), text));
+                .slice(0..document.session.text().len_bytes());
+            background_writes.push((document.id, path.clone(), text));
         }
-        for (index, path, text) in writes {
+        for (id, path, text) in writes {
             match self.write_file(&path, &text) {
                 Ok(()) => {
-                    if let Some(buffer) = self.buffers.entries.get_mut(index) {
-                        buffer.modified = false;
-                        buffer.missing = false;
+                    if let Some(document) = self.buffers.document_mut(id) {
+                        document.modified = false;
+                        document.missing = false;
                     }
                     self.mark_self_write(&path);
                     self.clear_conflict(&path);
@@ -620,12 +650,12 @@ impl Model {
                 }
             }
         }
-        for (path, text) in background_writes {
+        for (id, path, text) in background_writes {
             match self.write_file(&path, &text) {
                 Ok(()) => {
-                    if let Some(buffer) = self.buffers.background.get_mut(&path) {
-                        buffer.modified = false;
-                        buffer.missing = false;
+                    if let Some(document) = self.buffers.document_mut(id) {
+                        document.modified = false;
+                        document.missing = false;
                     }
                     self.mark_self_write(&path);
                     self.clear_conflict(&path);

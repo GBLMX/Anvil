@@ -1,6 +1,6 @@
 # ADR-0079: Document and View Ownership for TUI Buffers
 
-- Status: Accepted
+- Status: Accepted; shared document/view store implemented 2026-11-27
 - Version: 1.0.0
 - Date: 2026-11-26
 - Related: [ADR-0010](0010-cursor-and-snapshot-ownership.md),

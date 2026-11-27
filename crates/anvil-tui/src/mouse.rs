@@ -434,7 +434,23 @@ pub(crate) fn handle_mouse(model: &mut Model, mouse: MouseEvent, width: u16, hei
                     model.view.hscroll = model.view.hscroll.saturating_add_signed(delta * 3);
                 }
             } else if split_target {
-                model.scroll_split_rows(delta);
+                if model.ui.focus.split {
+                    let index = model.buffers.split_left.unwrap_or(model.buffers.active);
+                    let lines = model
+                        .buffers
+                        .entries
+                        .get(index)
+                        .and_then(|view| model.buffers.document(view.document))
+                        .map_or(0, |document| document.session.index().len_lines());
+                    if let Some(view) = model.buffers.entries.get_mut(index) {
+                        view.scroll = view
+                            .scroll
+                            .saturating_add_signed(delta)
+                            .min(lines.saturating_sub(1));
+                    }
+                } else {
+                    model.scroll_split_rows(delta);
+                }
             } else if model.buffer_settings().soft_wrap {
                 let text_width = pane_width.saturating_sub(model.gutter_width());
                 model.scroll_display_rows_in_pane(delta, text_width);

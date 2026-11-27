@@ -120,16 +120,10 @@ impl WorkspaceEdit {
             } else {
                 model
                     .buffers
-                    .entries
-                    .iter()
-                    .find(|buffer| buffer.path.as_ref() == Some(path))
-                    .map(|buffer| buffer.editor.revision())
-                    .or_else(|| {
-                        model.buffers.split.as_ref().and_then(|pane| {
-                            (pane.buffer.path.as_ref() == Some(path))
-                                .then(|| pane.buffer.editor.revision())
-                        })
-                    })
+                    .documents
+                    .values()
+                    .find(|document| document.path.as_ref() == Some(path))
+                    .map(|document| document.session.revision())
             };
             if current != Some(*expected) {
                 return Err(format!("stale workspace edit for {}", path.display()));
@@ -621,13 +615,13 @@ fn load_state(model: &mut Model, path: &Path) -> Result<Option<EditorState>, Str
     if model.session.path.as_deref() == Some(path) {
         return Ok(Some(model.session.editor.clone().into_inner()));
     }
-    if let Some(buffer) = model
+    if let Some(document) = model
         .buffers
-        .entries
-        .iter()
-        .find(|buffer| buffer.path.as_deref() == Some(path))
+        .documents
+        .values()
+        .find(|document| document.path.as_deref() == Some(path))
     {
-        return Ok(Some(buffer.editor.clone().into_inner()));
+        return Ok(Some(document.session.clone().into_inner()));
     }
     if !path_exists(model, path)? {
         return Ok(None);
@@ -719,50 +713,49 @@ fn commit_states(model: &mut Model, prepared: HashMap<PathBuf, EditorState>) {
             model.session.cursor = cursor;
             model.file.modified = true;
             model.syntax_cache.highlights.borrow_mut().invalidate();
-            if let Some(buffer) = model
-                .buffers
-                .entries
-                .iter_mut()
-                .find(|buffer| buffer.path.as_ref() == Some(&path))
-            {
-                buffer.editor = model.session.editor.clone();
-                buffer.cursor = model.session.cursor;
-                buffer.modified = true;
-                buffer.syntax = Default::default();
+            if let Some(document) = model.buffers.active_document_mut() {
+                document.session = model.session.editor.clone();
+                document.modified = true;
+                document.syntax = Default::default();
             }
-        } else if let Some(buffer) = model
-            .buffers
-            .entries
-            .iter_mut()
-            .find(|buffer| buffer.path.as_ref() == Some(&path))
-        {
-            buffer.editor = state.into();
-            buffer.cursor = cursor;
-            buffer.modified = true;
-            buffer.syntax = Default::default();
-        } else if let Some(buffer) = model.buffers.background.get_mut(&path) {
-            buffer.editor = state.into();
-            buffer.cursor = cursor;
-            buffer.modified = true;
-            buffer.syntax = Default::default();
+            if let Some(view) = model.buffers.entries.get_mut(model.buffers.active) {
+                view.cursor = model.session.cursor;
+            }
+        } else if let Some(index) = model.buffers.entries.iter().position(|view| {
+            model
+                .buffers
+                .document(view.document)
+                .is_some_and(|document| document.path.as_ref() == Some(&path))
+        }) {
+            let document_id = model.buffers.entries[index].document;
+            if let Some(document) = model.buffers.document_mut(document_id) {
+                document.session = state.into();
+                document.modified = true;
+                document.syntax = Default::default();
+            }
+            if let Some(view) = model.buffers.entries.get_mut(index) {
+                view.cursor = cursor;
+            }
+        } else if let Some(document_id) = model.buffers.background.get(&path).copied() {
+            if let Some(document) = model.buffers.document_mut(document_id) {
+                document.session = state.into();
+                document.modified = true;
+                document.syntax = Default::default();
+            }
         } else {
-            model.buffers.background.insert(
-                path.clone(),
-                Buffer {
-                    id: BufferId::next(),
-                    editor: state.into(),
-                    path: Some(path),
-                    cursor: 0,
-                    visual_anchor: None,
-                    visual_line: false,
-                    missing: false,
-                    scroll: 0,
-                    hscroll: 0,
+            let id = DocumentId::next();
+            model.buffers.documents.insert(
+                id,
+                Document {
+                    id,
+                    session: state.into(),
+                    path: Some(path.clone()),
                     modified: true,
-                    search_query: String::new(),
+                    missing: false,
                     syntax: Default::default(),
                 },
             );
+            model.buffers.background.insert(path, id);
         }
     }
     model.sync_watch_paths();

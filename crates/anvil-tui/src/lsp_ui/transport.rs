@@ -114,19 +114,22 @@ impl Model {
         if let Some(path) = &self.session.path {
             revisions.insert(path.clone(), self.session.editor.revision());
         }
-        for buffer in &self.buffers.entries {
-            if let Some(path) = &buffer.path {
+        for view in &self.buffers.entries {
+            if let Some(document) = self.buffers.document(view.document)
+                && let Some(path) = &document.path
+            {
                 revisions
                     .entry(path.clone())
-                    .or_insert_with(|| buffer.editor.revision());
+                    .or_insert_with(|| document.session.revision());
             }
         }
         if let Some(pane) = &self.buffers.split
-            && let Some(path) = &pane.buffer.path
+            && let Some(document) = self.buffers.document(pane.buffer.document)
+            && let Some(path) = &document.path
         {
             revisions
                 .entry(path.clone())
-                .or_insert_with(|| pane.buffer.editor.revision());
+                .or_insert_with(|| document.session.revision());
         }
         revisions
     }

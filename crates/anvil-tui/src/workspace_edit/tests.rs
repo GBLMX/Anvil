@@ -34,12 +34,13 @@ fn applies_changes_across_open_and_unopened_files() {
     .expect("parse");
     workspace_edit.apply(&mut model).expect("apply");
     assert_eq!(model.session.editor.text().slice(0..4), "Xone");
-    let second_buffer = model
+    let second_id = *model
         .buffers
         .background
         .get(&second.canonicalize().expect("canonical"))
         .expect("second buffer");
-    assert_eq!(second_buffer.editor.text().slice(0..4), "two!");
+    let second_buffer = model.buffers.document(second_id).expect("document");
+    assert_eq!(second_buffer.session.text().slice(0..4), "two!");
     assert!(second_buffer.modified);
 }
 
@@ -148,8 +149,9 @@ fn external_change_reloads_clean_background_buffer() {
     fs::write(&second, "disk\n").expect("write disk");
 
     model.handle_external_change(path.clone());
-    let buffer = model.buffers.background.get(&path).expect("background");
-    assert_eq!(buffer.editor.text().slice(0..5), "disk\n");
+    let id = *model.buffers.background.get(&path).expect("background");
+    let buffer = model.buffers.document(id).expect("background");
+    assert_eq!(buffer.session.text().slice(0..5), "disk\n");
     assert!(!buffer.modified);
 
     fs::remove_file(&second).expect("remove");
@@ -157,9 +159,8 @@ fn external_change_reloads_clean_background_buffer() {
     assert!(
         model
             .buffers
-            .background
-            .get(&path)
-            .expect("background")
+            .document(*model.buffers.background.get(&path).expect("background"))
+            .expect("document")
             .missing
     );
 }
@@ -190,13 +191,15 @@ fn external_change_prompts_for_modified_background_buffer() {
         &model.ui.input_mode,
         InputMode::ConfirmReload { path: pending } if pending == &path
     ));
-    let buffer = model.buffers.background.get(&path).expect("background");
-    assert_eq!(buffer.editor.text().slice(0..4), "two!");
+    let id = *model.buffers.background.get(&path).expect("background");
+    let buffer = model.buffers.document(id).expect("background");
+    assert_eq!(buffer.session.text().slice(0..4), "two!");
     assert!(buffer.modified);
 
     model.reload_external(&path).expect("reload");
-    let buffer = model.buffers.background.get(&path).expect("background");
-    assert_eq!(buffer.editor.text().slice(0..5), "disk\n");
+    let id = *model.buffers.background.get(&path).expect("background");
+    let buffer = model.buffers.document(id).expect("background");
+    assert_eq!(buffer.session.text().slice(0..5), "disk\n");
     assert!(!buffer.modified);
 }
 
@@ -222,13 +225,21 @@ fn active_buffer_snapshot_tracks_workspace_edit() {
     workspace_edit.apply(&mut model).expect("apply");
     assert_eq!(model.session.editor.text().slice(0..6), "Xfirst");
     assert_eq!(
-        model.buffers.entries[model.buffers.active]
-            .editor
+        model
+            .buffers
+            .active_document()
+            .expect("document")
+            .session
             .text()
             .slice(0..6),
         "Xfirst"
     );
-    assert!(model.buffers.entries[model.buffers.active].modified);
+    assert!(
+        model
+            .buffers
+            .active_document()
+            .is_some_and(|document| document.modified)
+    );
 }
 
 #[test]

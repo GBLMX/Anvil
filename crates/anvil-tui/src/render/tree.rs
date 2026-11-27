@@ -85,15 +85,11 @@ pub(crate) fn render_tree(model: &Model, frame: &mut Frame, area: Rect) -> Optio
             Span::raw(icon_padding),
             Span::styled(name, style),
         ];
-        let modified = model.session.path.as_ref() == Some(&entry.path) && model.file.modified
-            || model
-                .buffers
-                .entries
-                .iter()
-                .any(|buffer| buffer.path.as_ref() == Some(&entry.path) && buffer.modified)
-            || model.buffers.split.as_ref().is_some_and(|pane| {
-                pane.buffer.path.as_ref() == Some(&entry.path) && pane.buffer.modified
-            });
+        let modified =
+            model.session.path.as_ref() == Some(&entry.path) && model.file.modified
+                || model.buffers.documents.values().any(|document| {
+                    document.path.as_ref() == Some(&entry.path) && document.modified
+                });
         if modified {
             spans.push(Span::styled(
                 " *",

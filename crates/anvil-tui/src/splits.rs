@@ -17,9 +17,22 @@ impl Model {
             self.file.dirty = true;
             return;
         }
+        self.ensure_current_buffer();
         self.view.split_orientation = orientation;
+        self.buffers.split_left = Some(self.buffers.active);
+        let document = self.buffers.active_id;
+        let active = self.buffers.entries.get(self.buffers.active);
         self.buffers.split = Some(Pane {
-            buffer: self.snapshot(),
+            buffer: View {
+                id: ViewId::next(),
+                document,
+                cursor: self.session.cursor,
+                scroll: self.view.scroll,
+                hscroll: self.view.hscroll,
+                visual_anchor: self.edit.visual_anchor,
+                visual_line: self.edit.visual_line,
+                search_query: active.map_or_else(String::new, |view| view.search_query.clone()),
+            },
         });
         self.ui.focus.split = false;
         self.status.text = match orientation {
@@ -29,6 +42,28 @@ impl Model {
         .to_owned();
         self.sync_watch_paths();
         self.refresh_wrap_width();
+        self.file.dirty = true;
+    }
+
+    pub(crate) fn load_view(&mut self, view: &View) {
+        let Some(document) = self.buffers.document(view.document).cloned() else {
+            return;
+        };
+        self.session.editor = document.session;
+        self.session.path = document.path;
+        self.session.cursor = view.cursor.min(self.session.editor.text().len_bytes());
+        self.view.scroll = view.scroll;
+        self.view.hscroll = view.hscroll;
+        self.file.modified = document.modified;
+        self.file.missing = document.missing;
+        self.edit.visual_anchor = view.visual_anchor;
+        self.edit.visual_line = view.visual_line;
+        self.search.query = view.search_query.clone();
+        self.search.state.reset_for_buffer();
+        self.buffers.active_id = view.document;
+        self.ui.input_mode = InputMode::Normal;
+        self.input.pending = None;
+        self.sync_lsp_active();
         self.file.dirty = true;
     }
 
@@ -60,17 +95,36 @@ impl Model {
         if !self.auto_save_before_focus_change() {
             return;
         }
-        if self.ui.focus.split && self.file.modified {
-            self.status.text = "No write since last change (:q! to override)".to_owned();
-            self.file.dirty = true;
-            return;
+        self.sync_active();
+        if right {
+            self.buffers.split_left.get_or_insert(self.buffers.active);
+            let view = self
+                .buffers
+                .split
+                .as_ref()
+                .map(|pane| pane.buffer.clone())
+                .expect("split view");
+            if let Some(index) = self
+                .buffers
+                .entries
+                .iter()
+                .position(|active| active.document == view.document)
+            {
+                self.buffers.active = index;
+            }
+            self.load_view(&view);
+        } else {
+            let index = self
+                .buffers
+                .split_left
+                .take()
+                .unwrap_or(self.buffers.active);
+            let Some(view) = self.buffers.entries.get(index).cloned() else {
+                return;
+            };
+            self.buffers.active = index;
+            self.load_view(&view);
         }
-        let current = self.snapshot();
-        let Some(other) = self.buffers.split.take() else {
-            return;
-        };
-        self.buffers.split = Some(Pane { buffer: current });
-        self.restore_buffer(other.buffer);
         self.ui.focus.split = right;
         self.sync_watch_paths();
         self.refresh_wrap_width();
@@ -79,13 +133,19 @@ impl Model {
     }
 
     pub(crate) fn scroll_split_rows(&mut self, delta: isize) {
-        let Some(pane) = self.buffers.split.as_mut() else {
+        let Some(view) = self.buffers.split.as_ref() else {
             return;
         };
-        let total = pane.buffer.editor.index().len_lines();
+        let Some(document) = self.buffers.document(view.buffer.document) else {
+            return;
+        };
+        let total = document.session.index().len_lines();
         if total == 0 {
             return;
         }
+        let Some(pane) = self.buffers.split.as_mut() else {
+            return;
+        };
         pane.buffer.scroll = pane
             .buffer
             .scroll
@@ -101,75 +161,23 @@ impl Model {
         if !self.auto_save_before_focus_change() {
             return;
         }
-        if self.ui.focus.split && self.file.modified {
-            self.status.text = "No write since last change (:q! to override)".to_owned();
-            self.file.dirty = true;
-            return;
-        }
-        if self
-            .buffers
-            .split
-            .as_ref()
-            .is_some_and(|pane| pane.buffer.modified)
-        {
-            self.status.text = "No write since last change in split (:q! to override)".to_owned();
-            self.file.dirty = true;
-            return;
-        }
-        if self.ui.focus.split {
-            let other = self.buffers.split.take().expect("split");
-            self.restore_buffer(other.buffer);
-        } else {
-            self.buffers.split = None;
-        }
+        let was_focused = self.ui.focus.split;
+        self.sync_active();
+        self.buffers.split = None;
         self.ui.focus.split = false;
+        if was_focused {
+            let index = self
+                .buffers
+                .split_left
+                .take()
+                .unwrap_or(self.buffers.active);
+            self.load_buffer(index);
+        } else {
+            self.buffers.split_left = None;
+        }
         self.status.text = "split closed".to_owned();
         self.sync_watch_paths();
         self.refresh_wrap_width();
-        self.file.dirty = true;
-    }
-
-    pub(crate) fn restore_buffer(&mut self, buffer: Buffer) {
-        let active = match buffer.path.as_ref() {
-            Some(path) => self
-                .buffers
-                .entries
-                .iter()
-                .position(|candidate| candidate.path.as_ref() == Some(path)),
-            None => self
-                .buffers
-                .entries
-                .get(self.buffers.active)
-                .filter(|candidate| candidate.path.is_none())
-                .map(|_| self.buffers.active)
-                .or_else(|| {
-                    self.buffers
-                        .entries
-                        .iter()
-                        .position(|candidate| candidate.path.is_none())
-                }),
-        };
-        self.session.editor = buffer.editor;
-        self.session.path = buffer.path;
-        self.session.cursor = buffer.cursor;
-        self.view.scroll = buffer.scroll;
-        self.view.hscroll = buffer.hscroll;
-        self.file.modified = buffer.modified;
-        self.file.missing = buffer.missing;
-        self.edit.visual_anchor = buffer.visual_anchor;
-        self.edit.visual_line = buffer.visual_line;
-        self.search.query = buffer.search_query;
-        self.search.state.reset_for_buffer();
-        if let Some(active) = active {
-            self.buffers.active = active;
-        }
-        self.ui.input_mode = InputMode::Normal;
-        self.input.pending = None;
-        self.syntax_cache
-            .highlights
-            .borrow_mut()
-            .switch_path(self.session.path.as_deref(), false);
-        self.sync_lsp_active();
         self.file.dirty = true;
     }
 }

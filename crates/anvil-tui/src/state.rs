@@ -10,9 +10,9 @@ use std::sync::atomic::{AtomicU64, Ordering};
 const GIT_STATUS_DEBOUNCE: Duration = Duration::from_millis(300);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub(crate) struct BufferId(u64);
+pub(crate) struct DocumentId(u64);
 
-impl BufferId {
+impl DocumentId {
     pub(crate) fn next() -> Self {
         static NEXT: AtomicU64 = AtomicU64::new(1);
         Self(NEXT.fetch_add(1, Ordering::Relaxed))
@@ -23,26 +23,41 @@ impl BufferId {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub(crate) struct ViewId(u64);
+
+impl ViewId {
+    pub(crate) fn next() -> Self {
+        static NEXT: AtomicU64 = AtomicU64::new(1);
+        Self(NEXT.fetch_add(1, Ordering::Relaxed))
+    }
+}
+
 #[derive(Clone)]
-pub(crate) struct Buffer {
-    pub(crate) id: BufferId,
-    pub(crate) editor: DocumentSession,
+pub(crate) struct Document {
+    pub(crate) id: DocumentId,
+    pub(crate) session: DocumentSession,
     pub(crate) path: Option<PathBuf>,
-    pub(crate) cursor: usize,
-    pub(crate) scroll: usize,
-    pub(crate) hscroll: usize,
     pub(crate) modified: bool,
     pub(crate) missing: bool,
-    pub(crate) visual_anchor: Option<usize>,
-    pub(crate) visual_line: bool,
-    pub(crate) search_query: String,
     pub(crate) syntax: anvil_syntax::SyntaxCache,
 }
 
-pub(crate) struct Pane {
-    pub(crate) buffer: Buffer,
+#[derive(Clone)]
+pub(crate) struct View {
+    pub(crate) id: ViewId,
+    pub(crate) document: DocumentId,
+    pub(crate) cursor: usize,
+    pub(crate) scroll: usize,
+    pub(crate) hscroll: usize,
+    pub(crate) visual_anchor: Option<usize>,
+    pub(crate) visual_line: bool,
+    pub(crate) search_query: String,
 }
 
+pub(crate) struct Pane {
+    pub(crate) buffer: View,
+}
 /// Vi word motion kind.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum WordMotion {
@@ -990,25 +1005,75 @@ pub(crate) struct AppearanceState {
 }
 
 pub(crate) struct BufferState {
-    /// All open buffers, including the active one after the first switch.
-    pub(crate) entries: Vec<Buffer>,
+    /// Document-owned text, history, path, and save state.
+    pub(crate) documents: HashMap<DocumentId, Document>,
+    /// View-owned cursor, scroll, selection, and search state.
+    pub(crate) entries: Vec<View>,
     /// Stable identity of the active editor document.
-    pub(crate) active_id: BufferId,
-    /// Active buffer index.
+    pub(crate) active_id: DocumentId,
+    /// Active view index.
     pub(crate) active: usize,
-    /// Secondary pane when a vertical split is open.
+    /// Secondary view when a vertical split is open.
     pub(crate) split: Option<Pane>,
-    /// Internal buffers for unopened files changed by workspace edits.
-    pub(crate) background: HashMap<PathBuf, Buffer>,
+    /// Active view index before focus moved into the split.
+    pub(crate) split_left: Option<usize>,
+    /// Internal documents for unopened files changed by workspace edits.
+    pub(crate) background: HashMap<PathBuf, DocumentId>,
+}
+
+impl BufferState {
+    pub(crate) fn document(&self, id: DocumentId) -> Option<&Document> {
+        self.documents.get(&id)
+    }
+
+    pub(crate) fn document_mut(&mut self, id: DocumentId) -> Option<&mut Document> {
+        self.documents.get_mut(&id)
+    }
+
+    pub(crate) fn view_document(&self, index: usize) -> Option<&Document> {
+        let view = self.entries.get(index)?;
+        self.document(view.document)
+    }
+
+    pub(crate) fn view_document_mut(&mut self, index: usize) -> Option<&mut Document> {
+        let id = self.entries.get(index)?.document;
+        self.document_mut(id)
+    }
+
+    pub(crate) fn active_view(&self) -> Option<&View> {
+        self.entries.get(self.active)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn active_document(&self) -> Option<&Document> {
+        self.document(self.active_id)
+    }
+
+    pub(crate) fn active_document_mut(&mut self) -> Option<&mut Document> {
+        self.document_mut(self.active_id)
+    }
 }
 
 impl Default for BufferState {
     fn default() -> Self {
+        let id = DocumentId::next();
         Self {
+            documents: HashMap::from([(
+                id,
+                Document {
+                    id,
+                    session: EditorState::from_text("").into(),
+                    path: None,
+                    modified: false,
+                    missing: false,
+                    syntax: Default::default(),
+                },
+            )]),
             entries: Vec::new(),
-            active_id: BufferId::next(),
+            active_id: id,
             active: 0,
             split: None,
+            split_left: None,
             background: HashMap::new(),
         }
     }

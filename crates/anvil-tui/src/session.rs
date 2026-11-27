@@ -81,24 +81,34 @@ pub(crate) fn restore(model: &mut Model, workspace: &Path) -> Result<bool, Strin
 
     model.workspace.conflict_swaps.clear();
     model.workspace.stale_paths.clear();
-    let mut buffers = Vec::new();
+    let mut entries = Vec::new();
+    let mut documents = HashMap::new();
     let mut conflicts = 0;
-    for (buffer, conflict, conflicted) in restored {
-        if buffer.path.is_none() && !buffer.modified {
+    for (document, mut view, conflict, conflicted) in restored {
+        if document.path.is_none() && !document.modified {
             continue;
         }
         if conflicted {
             conflicts += 1;
         }
-        if let (Some(path), Some(swap)) = (buffer.path.as_ref(), conflict) {
+        if let (Some(path), Some(swap)) = (document.path.as_ref(), conflict) {
             model.workspace.conflict_swaps.insert(path.clone(), swap);
         }
-        buffers.push(buffer);
+        if let Some(existing) = documents
+            .values()
+            .find(|existing: &&Document| existing.path.is_some() && existing.path == document.path)
+        {
+            view.document = existing.id;
+        } else {
+            documents.insert(document.id, document);
+        }
+        entries.push(view);
     }
-    if buffers.is_empty() {
+    if entries.is_empty() {
         return Ok(false);
     }
-    model.buffers.entries = buffers;
+    model.buffers.documents = documents;
+    model.buffers.entries = entries;
     model.buffers.active = state
         .active
         .min(model.buffers.entries.len().saturating_sub(1));
@@ -108,15 +118,46 @@ pub(crate) fn restore(model: &mut Model, workspace: &Path) -> Result<bool, Strin
     let index = model.buffers.active;
     model.load_buffer(index);
     model.overlays.lsp_results.folded = state.folded.into_iter().collect();
-    if let Some((buffer, conflict, conflicted)) = restored_split {
+    if let Some((document, mut view, conflict, conflicted)) = restored_split {
         if conflicted {
             conflicts += 1;
         }
-        if let (Some(path), Some(swap)) = (buffer.path.as_ref(), conflict) {
+        if let (Some(path), Some(swap)) = (document.path.as_ref(), conflict) {
             model.workspace.conflict_swaps.insert(path.clone(), swap);
         }
-        model.buffers.split = Some(Pane { buffer });
+        if let Some(existing) = model
+            .buffers
+            .documents
+            .values()
+            .find(|existing| existing.path.is_some() && existing.path == document.path)
+        {
+            view.document = existing.id;
+        } else {
+            model.buffers.documents.insert(document.id, document);
+        }
+        model.buffers.split = Some(Pane { buffer: view });
         model.ui.focus.split = state.split_focus;
+        if state.split_focus {
+            model.buffers.split_left = Some(model.buffers.active);
+            let split_document = model
+                .buffers
+                .split
+                .as_ref()
+                .map(|pane| pane.buffer.document);
+            if let Some(split_document) = split_document
+                && let Some(index) = model
+                    .buffers
+                    .entries
+                    .iter()
+                    .position(|view| view.document == split_document)
+            {
+                model.buffers.active = index;
+            }
+            let split_view = model.buffers.split.as_ref().map(|pane| pane.buffer.clone());
+            if let Some(split_view) = split_view {
+                model.load_view(&split_view);
+            }
+        }
     }
 
     model.status.text = if conflicts == 0 {
@@ -131,7 +172,7 @@ pub(crate) fn restore(model: &mut Model, workspace: &Path) -> Result<bool, Strin
 fn restore_buffer(
     model: &mut Model,
     saved: SessionBuffer,
-) -> Result<(Buffer, Option<PathBuf>, bool), String> {
+) -> Result<(Document, View, Option<PathBuf>, bool), String> {
     let path = saved
         .path
         .as_ref()
@@ -188,21 +229,26 @@ fn restore_buffer(
     } else {
         (disk_text.unwrap_or_default(), false)
     };
-    let buffer = Buffer {
-        id: BufferId::next(),
-        editor: EditorState::from_text(&text).into(),
+    let id = DocumentId::next();
+    let document = Document {
+        id,
+        session: EditorState::from_text(&text).into(),
         path: path.clone(),
+        modified,
+        missing: path.as_ref().is_some_and(|path| !path.is_file()),
+        syntax: Default::default(),
+    };
+    let view = View {
+        id: ViewId::next(),
+        document: id,
         cursor: saved.cursor,
         scroll: saved.scroll,
         hscroll: saved.hscroll,
-        modified,
-        missing: path.as_ref().is_some_and(|path| !path.is_file()),
         visual_anchor: None,
         visual_line: false,
         search_query: String::new(),
-        syntax: Default::default(),
     };
-    Ok((buffer, conflict_swap, conflicted))
+    Ok((document, view, conflict_swap, conflicted))
 }
 
 impl Model {
@@ -278,25 +324,28 @@ pub(crate) fn save(model: &mut Model, workspace: &Path) -> Result<(), String> {
         .map_err(|error| error.to_string())?;
     let swap_dir = directory.join("swaps");
     fs::create_dir_all(&swap_dir).map_err(|error| error.to_string())?;
-    let mut buffers = if model.buffers.entries.is_empty() {
-        vec![model.snapshot()]
+    let views = if model.buffers.entries.is_empty() {
+        vec![model.active_view_state()]
     } else {
         model.buffers.entries.clone()
     };
-    let mut saved = Vec::with_capacity(buffers.len());
+    let mut saved = Vec::with_capacity(views.len());
     let mut kept_swaps = Vec::new();
-    for (index, buffer) in buffers.drain(..).enumerate() {
-        let conflict_swap = buffer
+    for (index, view) in views.iter().enumerate() {
+        let Some(document) = model.buffers.document(view.document) else {
+            continue;
+        };
+        let conflict_swap = document
             .path
             .as_ref()
             .and_then(|path| model.workspace.conflict_swaps.get(path))
             .cloned();
-        let swap = if buffer.modified {
+        let swap = if document.modified {
             let path = swap_dir.join(format!("{index}.swap"));
-            let text = buffer
-                .editor
+            let text = document
+                .session
                 .text()
-                .slice(0..buffer.editor.text().len_bytes());
+                .slice(0..document.session.text().len_bytes());
             write_atomic(&path, text.as_bytes()).map_err(|error| error.to_string())?;
             kept_swaps.push(path.clone());
             Some(path)
@@ -307,29 +356,32 @@ pub(crate) fn save(model: &mut Model, workspace: &Path) -> Result<(), String> {
             conflict_swap
         };
         saved.push(SessionBuffer {
-            path: buffer.path.clone(),
-            cursor: buffer.cursor,
-            scroll: buffer.scroll,
-            hscroll: buffer.hscroll,
-            modified: buffer.modified,
-            conflict: !buffer.modified && swap.is_some(),
+            path: document.path.clone(),
+            cursor: view.cursor,
+            scroll: view.scroll,
+            hscroll: view.hscroll,
+            modified: document.modified,
+            conflict: !document.modified && swap.is_some(),
             swap,
-            source_mtime_ns: buffer.path.as_deref().and_then(source_mtime_ns),
+            source_mtime_ns: document.path.as_deref().and_then(source_mtime_ns),
         });
     }
     let split = if let Some(pane) = model.buffers.split.as_ref() {
-        let buffer = &pane.buffer;
-        let conflict_swap = buffer
+        let view = &pane.buffer;
+        let Some(document) = model.buffers.document(view.document) else {
+            return Ok(());
+        };
+        let conflict_swap = document
             .path
             .as_ref()
             .and_then(|path| model.workspace.conflict_swaps.get(path))
             .cloned();
-        let swap = if buffer.modified {
+        let swap = if document.modified {
             let path = swap_dir.join("split.swap");
-            let text = buffer
-                .editor
+            let text = document
+                .session
                 .text()
-                .slice(0..buffer.editor.text().len_bytes());
+                .slice(0..document.session.text().len_bytes());
             write_atomic(&path, text.as_bytes()).map_err(|error| error.to_string())?;
             kept_swaps.push(path.clone());
             Some(path)
@@ -340,14 +392,14 @@ pub(crate) fn save(model: &mut Model, workspace: &Path) -> Result<(), String> {
             conflict_swap
         };
         Some(SessionBuffer {
-            path: buffer.path.clone(),
-            cursor: buffer.cursor,
-            scroll: buffer.scroll,
-            hscroll: buffer.hscroll,
-            modified: buffer.modified,
-            conflict: !buffer.modified && swap.is_some(),
+            path: document.path.clone(),
+            cursor: view.cursor,
+            scroll: view.scroll,
+            hscroll: view.hscroll,
+            modified: document.modified,
+            conflict: !document.modified && swap.is_some(),
             swap,
-            source_mtime_ns: buffer.path.as_deref().and_then(source_mtime_ns),
+            source_mtime_ns: document.path.as_deref().and_then(source_mtime_ns),
         })
     } else {
         None
@@ -594,7 +646,13 @@ mod tests {
         assert!(restored.file.modified);
         assert_eq!(restored.session.editor.text().slice(0..5), "dirty");
         assert_eq!(restored.session.path.as_deref(), Some(right.as_path()));
-        assert_eq!(split.buffer.path.as_deref(), Some(left.as_path()));
+        assert_eq!(
+            restored
+                .buffers
+                .document(split.buffer.document)
+                .and_then(|document| document.path.as_deref()),
+            Some(right.as_path())
+        );
     }
     #[test]
     fn resolves_conflict_by_recovering_or_discarding_swap() {

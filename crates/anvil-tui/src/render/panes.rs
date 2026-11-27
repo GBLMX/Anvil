@@ -55,7 +55,8 @@ pub(crate) fn render_pipe_locations(model: &Model, frame: &mut Frame, area: Rect
 pub(crate) fn render_split_pane(
     frame: &mut Frame,
     area: Rect,
-    buffer: &Buffer,
+    view: &View,
+    document: &Document,
     is_active: bool,
     soft_wrap: bool,
     vertical: bool,
@@ -87,18 +88,18 @@ pub(crate) fn render_split_pane(
         }
     };
     frame.render_widget(block, area);
-    let total = buffer.editor.index().len_lines();
+    let total = document.session.index().len_lines();
     let digits = total.max(1).to_string().len().max(3);
     let text_width = usize::from(inner.width.saturating_sub((digits + 1) as u16));
     let mut lines = Vec::new();
-    'lines: for line_number in buffer.scroll..total {
-        let Some(start) = buffer.editor.index().line_to_offset(line_number) else {
+    'lines: for line_number in view.scroll..total {
+        let Some(start) = document.session.index().line_to_offset(line_number) else {
             break;
         };
-        let Some(line) = buffer.editor.index().offset_to_line(start) else {
+        let Some(line) = document.session.index().offset_to_line(start) else {
             break;
         };
-        let text = buffer.editor.text().slice(start..line.end);
+        let text = document.session.text().slice(start..line.end);
         if soft_wrap && text_width > 0 {
             for (index, (segment_start, segment_end)) in
                 wrap_ranges(&text, text_width).into_iter().enumerate()
@@ -135,7 +136,7 @@ pub(crate) fn render_split_pane(
     let hscroll = if soft_wrap {
         0
     } else {
-        u16::try_from(buffer.hscroll).unwrap_or(u16::MAX)
+        u16::try_from(view.hscroll).unwrap_or(u16::MAX)
     };
     frame.render_widget(
         Paragraph::new(lines)

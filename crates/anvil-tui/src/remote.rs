@@ -400,9 +400,15 @@ impl Model {
             .entries
             .iter()
             .enumerate()
-            .map(|(index, buffer)| BufferInfo {
-                path: buffer.path.clone(),
-                modified: buffer.modified,
+            .map(|(index, view)| BufferInfo {
+                path: self
+                    .buffers
+                    .document(view.document)
+                    .and_then(|document| document.path.clone()),
+                modified: self
+                    .buffers
+                    .document(view.document)
+                    .is_some_and(|document| document.modified),
                 active: index == self.buffers.active,
             })
             .collect::<Vec<_>>();

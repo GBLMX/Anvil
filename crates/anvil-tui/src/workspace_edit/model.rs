@@ -14,38 +14,20 @@ pub(super) fn path_is_open(model: &Model, path: &Path) -> bool {
     model.session.path.as_deref() == Some(path)
         || model
             .buffers
-            .entries
-            .iter()
-            .any(|buffer| buffer.path.as_deref() == Some(path))
-        || model
-            .buffers
-            .background
+            .documents
             .values()
-            .any(|buffer| buffer.path.as_deref() == Some(path))
-        || model
-            .buffers
-            .split
-            .as_ref()
-            .is_some_and(|pane| pane.buffer.path.as_deref() == Some(path))
+            .any(|document| document.path.as_deref() == Some(path))
 }
 
 pub(super) fn path_is_modified(model: &Model, path: &Path) -> bool {
     let affected = |candidate: &Path| candidate == path || candidate.starts_with(path);
     let active = model.session.path.as_deref().is_some_and(affected) && model.file.modified;
-    let buffer = model
+    let modified = model
         .buffers
-        .entries
-        .iter()
-        .any(|buffer| buffer.path.as_deref().is_some_and(affected) && buffer.modified);
-    let background = model
-        .buffers
-        .background
+        .documents
         .values()
-        .any(|buffer| buffer.path.as_deref().is_some_and(affected) && buffer.modified);
-    let split = model.buffers.split.as_ref().is_some_and(|pane| {
-        pane.buffer.path.as_deref().is_some_and(affected) && pane.buffer.modified
-    });
-    active || buffer || background || split
+        .any(|document| document.path.as_deref().is_some_and(affected) && document.modified);
+    active || modified
 }
 
 impl Model {
@@ -53,31 +35,17 @@ impl Model {
         if let Some(path) = self.session.path.as_mut() {
             *path = remap_path(path, from, to);
         }
-        for buffer in &mut self.buffers.entries {
-            if let Some(path) = buffer.path.as_mut() {
+        for document in self.buffers.documents.values_mut() {
+            if let Some(path) = document.path.as_mut() {
                 *path = remap_path(path, from, to);
+                document.syntax = Default::default();
             }
         }
         let background = std::mem::take(&mut self.buffers.background);
         self.buffers.background = background
             .into_iter()
-            .map(|(path, mut buffer)| {
-                let path = remap_path(&path, from, to);
-                buffer.path = Some(path.clone());
-                buffer.syntax = Default::default();
-                (path, buffer)
-            })
+            .map(|(path, id)| (remap_path(&path, from, to), id))
             .collect();
-        if let Some(pane) = self.buffers.split.as_mut()
-            && let Some(path) = pane.buffer.path.as_mut()
-        {
-            *path = remap_path(path, from, to);
-        }
-        if let Some(back) = self.pager.back.as_mut()
-            && let Some(path) = back.path.as_mut()
-        {
-            *path = remap_path(path, from, to);
-        }
         let diagnostics = std::mem::take(&mut self.language.diagnostics.by_path);
         self.language.diagnostics.by_path = diagnostics
             .into_iter()
@@ -103,26 +71,40 @@ impl Model {
         let affected = |candidate: Option<&Path>| {
             candidate.is_some_and(|candidate| candidate == path || candidate.starts_with(path))
         };
-        if self
+        let split_document = self
             .buffers
             .split
             .as_ref()
-            .is_some_and(|pane| affected(pane.buffer.path.as_deref()))
-        {
+            .map(|pane| pane.buffer.document)
+            .filter(|id| {
+                self.buffers
+                    .document(*id)
+                    .is_some_and(|document| affected(document.path.as_deref()))
+            });
+        if split_document.is_some() {
             self.buffers.split = None;
             self.ui.focus.split = false;
         }
-        while let Some(index) = self
-            .buffers
-            .entries
-            .iter()
-            .position(|buffer| affected(buffer.path.as_deref()))
-        {
+        while let Some(index) = self.buffers.entries.iter().position(|view| {
+            self.buffers
+                .document(view.document)
+                .is_some_and(|document| affected(document.path.as_deref()))
+        }) {
             self.close_buffer(index, true);
         }
+        let removed_background = self
+            .buffers
+            .background
+            .iter()
+            .filter(|(path, _)| affected(Some(path)))
+            .map(|(_, id)| *id)
+            .collect::<Vec<_>>();
         self.buffers
             .background
             .retain(|path, _| !affected(Some(path)));
+        for id in removed_background.into_iter().chain(split_document) {
+            self.prune_document(id);
+        }
         self.workspace.tree.stale = true;
         self.sync_watch_paths();
         self.file.dirty = true;

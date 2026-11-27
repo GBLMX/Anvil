@@ -593,8 +593,22 @@ fn navigation_preserves_modified_buffer() {
     );
     assert_eq!(model.session.editor.text().slice(0..6), "second");
     assert_eq!(model.buffers.entries.len(), 2);
-    assert!(model.buffers.entries[0].modified);
-    assert_eq!(model.buffers.entries[0].editor.text().slice(0..6), "Xfirst");
+    assert!(
+        model
+            .buffers
+            .document(model.buffers.entries[0].document)
+            .is_some_and(|document| document.modified)
+    );
+    assert_eq!(
+        model
+            .buffers
+            .document(model.buffers.entries[0].document)
+            .expect("document")
+            .session
+            .text()
+            .slice(0..6),
+        "Xfirst"
+    );
     model.switch_buffer(-1);
     assert_eq!(model.session.editor.text().slice(0..6), "Xfirst");
     assert!(model.file.modified);

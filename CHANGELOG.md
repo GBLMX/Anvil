@@ -78,6 +78,7 @@ post-`0.5.0` feature line.
   after a 120 ms debounce, and highlights the active parameter.
 
 ### Changed
+- TUI buffers now separate document state (text, undo, path, modified, syntax) from view state (cursor, scroll, selection, search); split panes share one document and keep independent cursors, and saves update every view.
 - `anvil-mcp` now accepts legacy `initialize` versions `2025-06-18` and
   `2025-11-25`; `2024-11-05` and `2025-03-26` are rejected with `-32022`.
 - The pinned Rust toolchain and workspace MSRV are now 1.100; deprecated

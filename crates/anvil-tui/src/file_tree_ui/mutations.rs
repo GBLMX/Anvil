@@ -372,20 +372,8 @@ impl Model {
             .path
             .as_ref()
             .is_some_and(|open| open == path || open.starts_with(path))
-            || self.buffers.entries.iter().any(|buffer| {
-                buffer
-                    .path
-                    .as_ref()
-                    .is_some_and(|open| open == path || open.starts_with(path))
-            })
-            || self.buffers.background.values().any(|buffer| {
-                buffer
-                    .path
-                    .as_ref()
-                    .is_some_and(|open| open == path || open.starts_with(path))
-            })
-            || self.buffers.split.as_ref().is_some_and(|pane| {
-                pane.buffer
+            || self.buffers.documents.values().any(|document| {
+                document
                     .path
                     .as_ref()
                     .is_some_and(|open| open == path || open.starts_with(path))
@@ -405,26 +393,17 @@ impl Model {
         if let Some(path) = self.session.path.as_mut() {
             *path = remap(path);
         }
-        for buffer in &mut self.buffers.entries {
-            if let Some(path) = buffer.path.as_mut() {
+        for document in self.buffers.documents.values_mut() {
+            if let Some(path) = document.path.as_mut() {
                 *path = remap(path);
+                document.syntax = Default::default();
             }
         }
         let background = std::mem::take(&mut self.buffers.background);
         self.buffers.background = background
             .into_iter()
-            .map(|(path, mut buffer)| {
-                let path = remap(&path);
-                buffer.path = Some(path.clone());
-                buffer.syntax = Default::default();
-                (path, buffer)
-            })
+            .map(|(path, id)| (remap(&path), id))
             .collect();
-        if let Some(pane) = self.buffers.split.as_mut()
-            && let Some(path) = pane.buffer.path.as_mut()
-        {
-            *path = remap(path);
-        }
         self.sync_watch_paths();
     }
 }
