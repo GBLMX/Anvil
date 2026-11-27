@@ -156,11 +156,15 @@ mod tests {
     fn parses_bounded_code_lenses_and_ignores_missing_commands() {
         let mut model = Model::new(EditorState::from_text("fn main() {}"), None);
         model.session.path = Some(PathBuf::from("main.rs"));
-        model
-            .language
-            .lsp_requests
-            .pending
-            .insert(31, LspRequestKind::CodeLens);
+        model.language.lsp_requests.pending.insert(
+            31,
+            crate::PendingRequest {
+                kind: LspRequestKind::CodeLens,
+                edit_revision: None,
+                edit_path: None,
+                edit_snapshot: None,
+            },
+        );
         model.handle_lsp_response(
             31,
             serde_json::json!([
@@ -188,11 +192,15 @@ mod tests {
     fn stale_response_uses_explicit_revision() {
         let mut model = Model::new(EditorState::from_text("fn main() {}"), None);
         model.session.path = Some(PathBuf::from("main.rs"));
-        model
-            .language
-            .lsp_requests
-            .pending
-            .insert(32, LspRequestKind::CodeLens);
+        model.language.lsp_requests.pending.insert(
+            32,
+            crate::PendingRequest {
+                kind: LspRequestKind::CodeLens,
+                edit_revision: None,
+                edit_path: None,
+                edit_snapshot: None,
+            },
+        );
         model.handle_lsp_response(
             32,
             serde_json::json!([

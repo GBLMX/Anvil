@@ -342,10 +342,7 @@ pub(crate) struct LspTransportState {
 
 #[derive(Default)]
 pub(crate) struct LspRequestsState {
-    pub(crate) pending: HashMap<u64, LspRequestKind>,
-    pub(crate) pending_edit_revision: HashMap<u64, u64>,
-    pub(crate) pending_edit_path: HashMap<u64, PathBuf>,
-    pub(crate) pending_edit_snapshot: HashMap<u64, HashMap<PathBuf, u64>>,
+    pub(crate) pending: HashMap<u64, PendingRequest>,
     pub(crate) versions: HashMap<PathBuf, u64>,
     pub(crate) next_request: u64,
     /// Whether a format-on-save request is in flight.
@@ -364,6 +361,15 @@ pub(crate) struct PendingRequest {
 }
 
 impl PendingRequest {
+    pub(crate) fn new(kind: LspRequestKind) -> Self {
+        Self {
+            kind,
+            edit_revision: None,
+            edit_path: None,
+            edit_snapshot: None,
+        }
+    }
+
     /// Captures the edit state a response is checked against, when `kind` needs it.
     pub(crate) fn capture(
         kind: LspRequestKind,
@@ -372,12 +378,7 @@ impl PendingRequest {
         snapshot: impl FnOnce() -> HashMap<PathBuf, u64>,
     ) -> Self {
         if !LspRequestsState::tracks_edit(kind) {
-            return Self {
-                kind,
-                edit_revision: None,
-                edit_path: None,
-                edit_snapshot: None,
-            };
+            return Self::new(kind);
         }
         Self {
             kind,
@@ -446,27 +447,12 @@ impl LspRequestsState {
 
     /// Tracks a sent request and the edit metadata captured with it.
     pub(crate) fn track(&mut self, id: u64, request: PendingRequest) {
-        self.pending.insert(id, request.kind);
-        if let Some(revision) = request.edit_revision {
-            self.pending_edit_revision.insert(id, revision);
-        }
-        if let Some(path) = request.edit_path {
-            self.pending_edit_path.insert(id, path);
-        }
-        if let Some(snapshot) = request.edit_snapshot {
-            self.pending_edit_snapshot.insert(id, snapshot);
-        }
+        self.pending.insert(id, request);
     }
 
     /// Removes and returns the request `id` identified, if still pending.
     pub(crate) fn take_response(&mut self, id: u64) -> Option<PendingRequest> {
-        let kind = self.pending.remove(&id)?;
-        Some(PendingRequest {
-            kind,
-            edit_revision: self.pending_edit_revision.remove(&id),
-            edit_path: self.pending_edit_path.remove(&id),
-            edit_snapshot: self.pending_edit_snapshot.remove(&id),
-        })
+        self.pending.remove(&id)
     }
 
     /// Classifies `request` against the live editor revision and active path.
@@ -492,29 +478,15 @@ impl LspRequestsState {
         None
     }
 
-    /// Drops edit metadata for requests that are no longer pending.
-    pub(crate) fn prune_orphaned_edit_metadata(&mut self) {
-        let pending = &self.pending;
-        self.pending_edit_revision
-            .retain(|id, _| pending.contains_key(id));
-        self.pending_edit_path
-            .retain(|id, _| pending.contains_key(id));
-        self.pending_edit_snapshot
-            .retain(|id, _| pending.contains_key(id));
-    }
-
     /// Cancels matching requests and drops the metadata they carried.
     pub(crate) fn cancel(&mut self, matches_kind: impl Fn(LspRequestKind) -> bool) {
-        self.pending.retain(|_, kind| !matches_kind(*kind));
-        self.prune_orphaned_edit_metadata();
+        self.pending
+            .retain(|_, request| !matches_kind(request.kind));
     }
 
     /// Forgets every tracked request.
     pub(crate) fn clear(&mut self) {
         self.pending.clear();
-        self.pending_edit_revision.clear();
-        self.pending_edit_path.clear();
-        self.pending_edit_snapshot.clear();
     }
 
     /// Whether a format-on-save round trip must be skipped right now.
@@ -1716,29 +1688,25 @@ mod tests {
         let mut state = LspRequestsState::default();
         let format = state.reserve_request_id();
         state.track(format, request(LspRequestKind::Formatting, 2, "a.rs"));
+        let format_request = state.pending.get(&format).expect("format request");
+        assert_eq!(format_request.kind, LspRequestKind::Formatting);
+        assert_eq!(format_request.edit_revision, Some(2));
+        assert_eq!(format_request.edit_path, Some(PathBuf::from("a.rs")));
         assert_eq!(
-            state.pending.get(&format),
-            Some(&LspRequestKind::Formatting)
-        );
-        assert_eq!(state.pending_edit_revision.get(&format), Some(&2));
-        assert_eq!(
-            state.pending_edit_path.get(&format),
-            Some(&PathBuf::from("a.rs"))
-        );
-        assert_eq!(
-            state
-                .pending_edit_snapshot
-                .get(&format)
+            format_request
+                .edit_snapshot
+                .as_ref()
                 .and_then(|snapshot| snapshot.get(&PathBuf::from("a.rs"))),
             Some(&2)
         );
 
         let hover = state.reserve_request_id();
         state.track(hover, request(LspRequestKind::Hover, 3, "a.rs"));
-        assert_eq!(state.pending.get(&hover), Some(&LspRequestKind::Hover));
-        assert!(!state.pending_edit_revision.contains_key(&hover));
-        assert!(!state.pending_edit_path.contains_key(&hover));
-        assert!(!state.pending_edit_snapshot.contains_key(&hover));
+        let hover_request = state.pending.get(&hover).expect("hover request");
+        assert_eq!(hover_request.kind, LspRequestKind::Hover);
+        assert!(hover_request.edit_revision.is_none());
+        assert!(hover_request.edit_path.is_none());
+        assert!(hover_request.edit_snapshot.is_none());
     }
 
     #[test]
@@ -1758,7 +1726,6 @@ mod tests {
         );
         assert_eq!(state.stale_reason(&tracked, 1, Some(path.as_path())), None);
         assert!(state.pending.is_empty());
-        assert!(state.pending_edit_path.is_empty());
     }
 
     #[test]
@@ -1786,16 +1753,10 @@ mod tests {
         state.track(rename, request(LspRequestKind::Rename, 1, "a.rs"));
         state.cancel(|kind| kind == LspRequestKind::Formatting);
         assert!(!state.pending.contains_key(&format));
-        assert!(!state.pending_edit_revision.contains_key(&format));
-        assert!(!state.pending_edit_path.contains_key(&format));
-        assert!(!state.pending_edit_snapshot.contains_key(&format));
-        assert!(state.pending_edit_path.contains_key(&rename));
+        assert!(state.pending.contains_key(&rename));
 
         state.clear();
         assert!(state.pending.is_empty());
-        assert!(state.pending_edit_revision.is_empty());
-        assert!(state.pending_edit_path.is_empty());
-        assert!(state.pending_edit_snapshot.is_empty());
     }
 
     #[test]

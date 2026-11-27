@@ -193,7 +193,7 @@ impl Model {
             return;
         }
         let class = {
-            let cache = self.syntax_cache.highlights.borrow().active_cache();
+            let cache = self.syntax_cache.highlights.borrow();
             cache
                 .highlights()
                 .iter()

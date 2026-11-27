@@ -324,13 +324,16 @@ pub(crate) fn save(model: &mut Model, workspace: &Path) -> Result<(), String> {
         .map_err(|error| error.to_string())?;
     let swap_dir = directory.join("swaps");
     fs::create_dir_all(&swap_dir).map_err(|error| error.to_string())?;
-    let views = if model.buffers.entries.is_empty() {
-        vec![model.active_view_state()]
+    let active_view;
+    let views: &[View] = if model.buffers.entries.is_empty() {
+        active_view = model.active_view_state();
+        std::slice::from_ref(&active_view)
     } else {
-        model.buffers.entries.clone()
+        &model.buffers.entries
     };
     let mut saved = Vec::with_capacity(views.len());
     let mut kept_swaps = Vec::new();
+    let mut saved_swaps: HashMap<DocumentId, Option<PathBuf>> = HashMap::new();
     for (index, view) in views.iter().enumerate() {
         let Some(document) = model.buffers.document(view.document) else {
             continue;
@@ -355,6 +358,7 @@ pub(crate) fn save(model: &mut Model, workspace: &Path) -> Result<(), String> {
             }
             conflict_swap
         };
+        saved_swaps.insert(view.document, swap.clone());
         saved.push(SessionBuffer {
             path: document.path.clone(),
             cursor: view.cursor,
@@ -371,25 +375,29 @@ pub(crate) fn save(model: &mut Model, workspace: &Path) -> Result<(), String> {
         let Some(document) = model.buffers.document(view.document) else {
             return Ok(());
         };
-        let conflict_swap = document
-            .path
-            .as_ref()
-            .and_then(|path| model.workspace.conflict_swaps.get(path))
-            .cloned();
-        let swap = if document.modified {
-            let path = swap_dir.join("split.swap");
-            let text = document
-                .session
-                .text()
-                .slice(0..document.session.text().len_bytes());
-            write_atomic(&path, text.as_bytes()).map_err(|error| error.to_string())?;
-            kept_swaps.push(path.clone());
-            Some(path)
+        let swap = if let Some(swap) = saved_swaps.get(&view.document) {
+            swap.clone()
         } else {
-            if let Some(path) = &conflict_swap {
+            let conflict_swap = document
+                .path
+                .as_ref()
+                .and_then(|path| model.workspace.conflict_swaps.get(path))
+                .cloned();
+            if document.modified {
+                let path = swap_dir.join("split.swap");
+                let text = document
+                    .session
+                    .text()
+                    .slice(0..document.session.text().len_bytes());
+                write_atomic(&path, text.as_bytes()).map_err(|error| error.to_string())?;
                 kept_swaps.push(path.clone());
+                Some(path)
+            } else {
+                if let Some(path) = &conflict_swap {
+                    kept_swaps.push(path.clone());
+                }
+                conflict_swap
             }
-            conflict_swap
         };
         Some(SessionBuffer {
             path: document.path.clone(),
