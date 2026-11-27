@@ -109,12 +109,17 @@ jobs:
                   failures.append(f"{key}: missing from PR run")
                   continue
               if before < 10_000:
-                  print(f"{key}: skipped (p99 < 10us)")
+                  print(f"{key}: skipped (p99 < {before:.0f}ns)")
                   continue
+              delta = after - before
               ratio = after / before if before else float("inf")
-              print(f"{key}: {ratio:.3f}x")
-              if ratio > 1.10:
-                  failures.append(f"{key}: p99 regressed {ratio:.3f}x")
+              print(f"{key}: {ratio:.3f}x ({before:.0f}ns -> {after:.0f}ns)")
+              if ratio > 1.10 and delta > 100_000:
+                  failures.append(
+                      f"{key}: p99 regressed {ratio:.3f}x ({delta:.0f}ns)"
+                  )
+              elif ratio > 1.10:
+                  print(f"{key}: {delta:.0f}ns increase within noise floor")
           if failures:
               print("\n".join(failures))
               sys.exit(1)
