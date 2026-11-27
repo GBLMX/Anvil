@@ -101,12 +101,16 @@ def check_links(path: Path, text: str) -> None:
         if not target_path.exists():
             errors.append(f"{path.relative_to(ROOT)}: missing link target {raw}")
             continue
-        if separator and anchor and target_path.suffix.lower() == ".md":
-            if anchor not in file_anchors(target_path):
-                errors.append(
-                    f"{path.relative_to(ROOT)}: missing anchor #{anchor} "
-                    f"in {target_path.relative_to(ROOT)}"
-                )
+        if (
+            separator
+            and anchor
+            and target_path.suffix.lower() == ".md"
+            and anchor not in file_anchors(target_path)
+        ):
+            errors.append(
+                f"{path.relative_to(ROOT)}: missing anchor #{anchor} "
+                f"in {target_path.relative_to(ROOT)}"
+            )
 
 
 def status_block(text: str) -> str | None:
