@@ -31,6 +31,8 @@ jobs:
           fetch-depth: 0
       - name: Check public API semver
         uses: obi1kenobi/cargo-semver-checks-action@v2
+        with:
+          baseline-rev: origin/main
 
   bindings:
     runs-on: ubuntu-latest
@@ -60,20 +62,26 @@ jobs:
         run: rustup show
       - name: Measure PR p99
         run: |
-          TEXT_P99_MB=10 TEXT_P99_SAMPLES=100 \
-            cargo run --release -p anvil-text-bench --bin text-p99 > /tmp/pr-p99.csv
+          for run in 1 2 3; do
+            TEXT_P99_MB=10 TEXT_P99_SAMPLES=100 \
+              cargo run --release -p anvil-text-bench --bin text-p99 > "/tmp/pr-p99-$run.csv"
+          done
       - name: Measure main p99
         run: |
           git worktree add --detach /tmp/bench-base origin/main
           cd /tmp/bench-base
           if [ -d crates/anvil-text-bench ]; then
-            CARGO_TARGET_DIR=/tmp/bench-target \
-              TEXT_P99_MB=10 TEXT_P99_SAMPLES=100 \
-              cargo run --release -p anvil-text-bench --bin text-p99 > /tmp/base-p99.csv
+            for run in 1 2 3; do
+              CARGO_TARGET_DIR=/tmp/bench-target \
+                TEXT_P99_MB=10 TEXT_P99_SAMPLES=100 \
+                cargo run --release -p anvil-text-bench --bin text-p99 > "/tmp/base-p99-$run.csv"
+            done
           else
-            CARGO_TARGET_DIR=/tmp/bench-target \
-              TEXT_P99_MB=10 TEXT_P99_SAMPLES=100 \
-              cargo run --release -p anvil-core --bin text-p99 > /tmp/base-p99.csv
+            for run in 1 2 3; do
+              CARGO_TARGET_DIR=/tmp/bench-target \
+                TEXT_P99_MB=10 TEXT_P99_SAMPLES=100 \
+                cargo run --release -p anvil-core --bin text-p99 > "/tmp/base-p99-$run.csv"
+            done
           fi
       - name: Compare p99 against main
         run: |
@@ -81,17 +89,19 @@ jobs:
           from pathlib import Path
           import sys
 
-          def read(path):
+          def read(pattern):
               rows = {}
-              for line in Path(path).read_text().splitlines():
-                  if not line or line.startswith("backend,"):
-                      continue
-                  backend, mb, workload, _p50, _p95, p99, _samples = line.split(",")
-                  rows[(backend, mb, workload)] = float(p99)
+              for path in sorted(Path("/tmp").glob(pattern)):
+                  for line in path.read_text().splitlines():
+                      if not line or line.startswith("backend,"):
+                          continue
+                      backend, mb, workload, _p50, _p95, p99, _samples = line.split(",")
+                      key = (backend, mb, workload)
+                      rows[key] = min(rows.get(key, float("inf")), float(p99))
               return rows
 
-          base = read("/tmp/base-p99.csv")
-          current = read("/tmp/pr-p99.csv")
+          base = read("base-p99-*.csv")
+          current = read("pr-p99-*.csv")
           failures = []
           for key, before in base.items():
               after = current.get(key)
