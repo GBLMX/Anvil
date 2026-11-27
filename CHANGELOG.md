@@ -56,6 +56,26 @@ post-`0.5.0` feature line.
 - Offline signing can consume the CI build-input artifact; `Release publish`
   verifies provenance, input checksums, and the checksum-key fingerprint
   before uploading release assets.
+- `[completion] auto_brackets` (env `ANVIL_COMPLETION_AUTO_BRACKETS`) inserts
+  `()` for function, method, and constructor completions that omit it, skipping
+  TSX/JSX/Vue source files.
+- Completion now opens keyword suggestions after an idle delay (default 250 ms
+  after 2 word characters), with `completion.auto_popup`,
+  `completion.popup_delay_ms`, `completion.popup_trigger_len`,
+  `completion.popup_in_comments`, and `completion.popup_in_strings` toggles.
+  Entering insert mode on a trigger character also opens completion.
+- `[completion] inline_completion` requests LSP 3.18 inline completion, shows
+  the result as italic ghost text at the cursor, and accepts it with Tab.
+- Completion documentation renders basic Markdown (headings, bullets, fences,
+  inline code) and scrolls with PageUp/PageDown or the mouse wheel over the
+  side panel; signature help keeps the active-parameter highlight.
+- LSP snippets now support choices, nested placeholders, and variables; a parse
+  failure keeps the server text instead of stripping it.
+- Completion applies server `allCommitCharacters`, executes completion
+  `command`s, renders `labelDetails` and deprecated tags, honors
+  `insertTextMode` indentation, and preselects the most recently accepted item.
+- Signature help uses the server's trigger and retrigger characters, refreshes
+  after a 120 ms debounce, and highlights the active parameter.
 
 ### Changed
 - `anvil-mcp` now accepts legacy `initialize` versions `2025-06-18` and
@@ -82,6 +102,21 @@ post-`0.5.0` feature line.
 - Release cycles now follow ADR-0080: weekly security and dependency checks, a
   changelog gate for user-visible pull requests, a scripted release checklist,
   and plan review freshness.
+
+### Fixed
+- Insert-mode completion now triggers on the language server's advertised
+  `triggerCharacters` (and `/` for path completion), sends trigger-character
+  and incomplete-list request contexts, re-requests truncated lists while
+  typing, and keeps local buffer/path items when the server returns none.
+- The completion popup anchors at the cursor and flips above it near the bottom
+  of the viewport instead of opening in the center of the editor.
+- Completion accepts apply `itemDefaults`, `InsertReplaceEdit` ranges, and
+  replace text typed after the request instead of duplicating it.
+- Callable completion snippets keep argument placeholders inside `()`, accepting
+  one requests signature help, and server commit characters accept the selected
+  item instead of filtering the list.
+- Completion and signature-help requests now advertise context support, send
+  `isRetrigger`, and keep the server's `sortText` order before the user types.
 
 ### Removed
 - `anvil-core` no longer exports benchmark-only `RopeBuffer`/`GapBuffer` or

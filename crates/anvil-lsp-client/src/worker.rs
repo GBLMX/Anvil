@@ -17,6 +17,18 @@ const LSP_COMMAND_CAPACITY: usize = 1024;
 const LSP_EVENT_CAPACITY: usize = 1024;
 const LSP_SHUTDOWN: Duration = Duration::from_millis(250);
 
+/// Capabilities advertised by a language server during initialize.
+#[derive(Clone, Debug)]
+pub struct LspCapabilities {
+    pub inlay_hints: bool,
+    pub semantic_token_types: Vec<String>,
+    pub completion_trigger_characters: Vec<String>,
+    pub completion_all_commit_characters: Vec<String>,
+    pub signature_help_trigger_characters: Vec<String>,
+    pub signature_help_retrigger_characters: Vec<String>,
+    pub server_info: Option<String>,
+}
+
 #[derive(Debug)]
 pub enum LspEvent {
     Diagnostics(PathBuf, Vec<Diagnostic>),
@@ -75,6 +87,7 @@ pub struct LspWorker {
     commands: SyncSender<LspCommand>,
     diagnostics: Arc<Mutex<HashMap<PathBuf, Vec<Diagnostic>>>>,
     overflow_responses: Arc<Mutex<HashMap<u64, String>>>,
+    capabilities: Arc<Mutex<Option<LspCapabilities>>>,
     root: PathBuf,
     settings: Value,
 }
@@ -87,6 +100,14 @@ impl LspWorker {
 
     pub fn settings(&self) -> Value {
         self.settings.clone()
+    }
+
+    /// Capabilities captured during initialize, when the handshake succeeded.
+    pub fn capabilities(&self) -> Option<LspCapabilities> {
+        self.capabilities
+            .lock()
+            .ok()
+            .and_then(|capabilities| capabilities.clone())
     }
 
     pub fn start(
@@ -119,6 +140,8 @@ impl LspWorker {
         let worker_diagnostics = Arc::clone(&diagnostics);
         let overflow_responses = Arc::new(Mutex::new(HashMap::new()));
         let worker_overflow = Arc::clone(&overflow_responses);
+        let capabilities = Arc::new(Mutex::new(None));
+        let worker_capabilities = Arc::clone(&capabilities);
         let mut group = TaskGroup::with_config(group_config);
         let spawn = group.spawn("lsp", move |context| {
             let relative_root = root
@@ -168,13 +191,36 @@ impl LspWorker {
                                 "dynamicRegistration": false
                             },
                             "completion": {
+                                "contextSupport": true,
                                 "completionItem": {
                                     "snippetSupport": true,
+                                    "insertReplaceSupport": true,
                                     "documentationFormat": ["markdown", "plaintext"],
                                     "resolveSupport": {
                                         "properties": ["documentation", "detail"]
                                     }
+                                },
+                                "completionList": {
+                                    "itemDefaults": [
+                                        "editRange",
+                                        "insertTextFormat",
+                                        "insertTextMode",
+                                        "data"
+                                    ]
                                 }
+                            },
+                            "signatureHelp": {
+                                "contextSupport": true,
+                                "signatureInformation": {
+                                    "documentationFormat": ["markdown", "plaintext"],
+                                    "parameterInformation": {
+                                        "labelOffsetSupport": true
+                                    },
+                                    "activeParameterSupport": true
+                                }
+                            },
+                            "inlineCompletion": {
+                                "dynamicRegistration": false
                             },
                             "semanticTokens": {
                                 "dynamicRegistration": false,
@@ -197,25 +243,24 @@ impl LspWorker {
                 let _ = send_lsp_event(&context, &worker_overflow, LspEvent::Crashed(error));
                 return Ok(());
             }
-            let (inlay_hints, semantic_token_types, server_info) =
-                match wait_initialize(&mut client, &root, &current_settings) {
-                    Ok(capabilities) => capabilities,
-                    Err(error) => {
-                        let _ = send_lsp_event(
-                            &context,
-                            &worker_overflow,
-                            LspEvent::StartupError(error),
-                        );
-                        return Ok(());
-                    }
-                };
+            let capabilities = match wait_initialize(&mut client, &root, &current_settings) {
+                Ok(capabilities) => capabilities,
+                Err(error) => {
+                    let _ =
+                        send_lsp_event(&context, &worker_overflow, LspEvent::StartupError(error));
+                    return Ok(());
+                }
+            };
+            if let Ok(mut stored) = worker_capabilities.lock() {
+                *stored = Some(capabilities.clone());
+            }
             let _ = send_lsp_event(
                 &context,
                 &worker_overflow,
                 LspEvent::Capabilities {
-                    inlay_hints,
-                    semantic_token_types,
-                    server_info,
+                    inlay_hints: capabilities.inlay_hints,
+                    semantic_token_types: capabilities.semantic_token_types.clone(),
+                    server_info: capabilities.server_info.clone(),
                 },
             );
             let initialized = serde_json::json!({
@@ -402,6 +447,7 @@ impl LspWorker {
                 diagnostics,
                 overflow_responses,
                 root: worker_root,
+                capabilities,
                 settings: worker_settings,
             }),
             Err(error) => Err(format!("lsp thread failed: {error}")),
@@ -706,11 +752,26 @@ fn send(client: &mut GatewayClient, message: &serde_json::Value) -> Result<(), S
     client.lsp_send(&body).map_err(|error| error.to_string())
 }
 
+fn capability_strings(capabilities: Option<&Value>, pointer: &str) -> Vec<String> {
+    capabilities
+        .and_then(|capabilities| capabilities.pointer(pointer))
+        .and_then(Value::as_array)
+        .map(|values| {
+            values
+                .iter()
+                .filter_map(Value::as_str)
+                .filter(|value| !value.is_empty())
+                .map(str::to_owned)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 fn wait_initialize(
     client: &mut GatewayClient,
     root: &Path,
     settings: &Value,
-) -> Result<(bool, Vec<String>, Option<String>), String> {
+) -> Result<LspCapabilities, String> {
     let deadline = Instant::now() + INITIALIZE_TIMEOUT;
     loop {
         if Instant::now() >= deadline {
@@ -769,6 +830,14 @@ fn wait_initialize(
                         .collect()
                 })
                 .unwrap_or_default();
+            let completion_trigger_characters =
+                capability_strings(capabilities, "/completionProvider/triggerCharacters");
+            let completion_all_commit_characters =
+                capability_strings(capabilities, "/completionProvider/allCommitCharacters");
+            let signature_help_trigger_characters =
+                capability_strings(capabilities, "/signatureHelpProvider/triggerCharacters");
+            let signature_help_retrigger_characters =
+                capability_strings(capabilities, "/signatureHelpProvider/retriggerCharacters");
             let server_info = data.pointer("/result/serverInfo").map(|info| {
                 let name = info
                     .get("name")
@@ -780,7 +849,15 @@ fn wait_initialize(
                     .unwrap_or("unknown");
                 format!("{name} {version}")
             });
-            return Ok((inlay_hints, semantic_token_types, server_info));
+            return Ok(LspCapabilities {
+                inlay_hints,
+                semantic_token_types,
+                completion_trigger_characters,
+                completion_all_commit_characters,
+                signature_help_trigger_characters,
+                signature_help_retrigger_characters,
+                server_info,
+            });
         }
     }
 }
@@ -806,6 +883,7 @@ mod tests {
             commands,
             diagnostics: Arc::new(Mutex::new(HashMap::new())),
             overflow_responses: Arc::new(Mutex::new(HashMap::new())),
+            capabilities: Arc::new(Mutex::new(None)),
             root: PathBuf::from("/tmp"),
             settings: Value::Null,
         };
@@ -991,7 +1069,18 @@ mod tests {
                         "params": {"data": {
                             "jsonrpc": "2.0",
                             "id": 1,
-                            "result": {}
+                            "result": {
+                                "capabilities": {
+                                    "completionProvider": {
+                                        "triggerCharacters": [".", "::"],
+                                        "allCommitCharacters": [")", ";"]
+                                    },
+                                    "signatureHelpProvider": {
+                                        "triggerCharacters": ["(", ","],
+                                        "retriggerCharacters": [","]
+                                    }
+                                }
+                            }
                         }}
                     });
                     connection
@@ -1049,33 +1138,64 @@ mod tests {
         .expect("worker");
         assert_eq!(worker.root(), Path::new("/tmp"));
         let deadline = Instant::now() + Duration::from_secs(5);
+        let mut saw_capabilities = false;
+        let mut saw_diagnostics = false;
         loop {
             for event in worker.poll() {
-                if let LspEvent::Diagnostics(path, diagnostics) = event {
-                    assert_eq!(path, PathBuf::from("/tmp/a.rs"));
-                    assert_eq!(diagnostics.len(), 1);
-                    let started = Instant::now();
-                    drop(worker);
-                    assert!(
-                        started.elapsed() < Duration::from_secs(5),
-                        "worker drop exceeded its shutdown budget"
-                    );
-                    let (lock, ready) = &*stopped;
-                    let deadline = Instant::now() + Duration::from_secs(5);
-                    let mut done = lock.lock().expect("stop state");
-                    while !*done {
-                        let remaining = deadline.saturating_duration_since(Instant::now());
-                        assert!(!remaining.is_zero(), "lsp.stop was not sent");
-                        let (next, _) = ready.wait_timeout(done, remaining).expect("stop state");
-                        done = next;
+                match event {
+                    LspEvent::Capabilities { .. } => {
+                        let capabilities = worker.capabilities().expect("capabilities");
+                        assert_eq!(
+                            capabilities.completion_trigger_characters,
+                            vec![".".to_owned(), "::".to_owned()]
+                        );
+                        assert_eq!(
+                            capabilities.completion_all_commit_characters,
+                            vec![")".to_owned(), ";".to_owned()]
+                        );
+                        assert_eq!(
+                            capabilities.signature_help_trigger_characters,
+                            vec!["(".to_owned(), ",".to_owned()]
+                        );
+                        assert_eq!(
+                            capabilities.signature_help_retrigger_characters,
+                            vec![",".to_owned()]
+                        );
+                        saw_capabilities = true;
                     }
-                    server.join().expect("server");
-                    let _ = std::fs::remove_file(&socket);
-                    return;
+                    LspEvent::Diagnostics(path, diagnostics) => {
+                        assert_eq!(path, PathBuf::from("/tmp/a.rs"));
+                        assert_eq!(diagnostics.len(), 1);
+                        saw_diagnostics = true;
+                    }
+                    _ => {}
                 }
             }
-            assert!(Instant::now() < deadline, "no diagnostics event");
+            if saw_capabilities && saw_diagnostics {
+                break;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "no capabilities/diagnostics event"
+            );
             std::thread::sleep(Duration::from_millis(10));
         }
+        let started = Instant::now();
+        drop(worker);
+        assert!(
+            started.elapsed() < Duration::from_secs(5),
+            "worker drop exceeded its shutdown budget"
+        );
+        let (lock, ready) = &*stopped;
+        let deadline = Instant::now() + Duration::from_secs(5);
+        let mut done = lock.lock().expect("stop state");
+        while !*done {
+            let remaining = deadline.saturating_duration_since(Instant::now());
+            assert!(!remaining.is_zero(), "lsp.stop was not sent");
+            let (next, _) = ready.wait_timeout(done, remaining).expect("stop state");
+            done = next;
+        }
+        server.join().expect("server");
+        let _ = std::fs::remove_file(&socket);
     }
 }

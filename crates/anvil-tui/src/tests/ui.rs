@@ -1606,3 +1606,132 @@ fn clicking_completion_row_selects_it() {
         1
     );
 }
+
+#[test]
+fn completion_popup_anchors_to_cursor_and_flips_above() {
+    let item = crate::state::CompletionItem {
+        source: anvil_session::provider::ProviderId::new("builtin.lsp"),
+        label: "item".to_owned(),
+        filter_text: "item".to_owned(),
+        sort_text: "item".to_owned(),
+        preselect: false,
+        insert: "item".to_owned(),
+        snippet: None,
+        detail: String::new(),
+        replace: None,
+        replace_bytes: None,
+        documentation: None,
+        raw: serde_json::json!({"kind": 6}),
+        resolved: true,
+    };
+    let text = (0..20)
+        .map(|line| format!("line{line}"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let mut model = Model::new(EditorState::from_text(&text), None);
+    model.start_page.welcome = false;
+    model.session.cursor = model
+        .session
+        .editor
+        .text()
+        .slice(0..text.len())
+        .rfind("line19")
+        .expect("line19");
+    model.language.completion.completion = Some(crate::state::CompletionState {
+        items: vec![item.clone(), item],
+        filtered: vec![0, 1],
+        query: String::new(),
+        selected: 0,
+    });
+    let area = ratatui::layout::Rect::new(0, 0, 100, 24);
+    let geometry = crate::render::completion_geometry(&model, area).expect("completion layout");
+    let rects = crate::layout::workbench_rects(&model, 100, 24).expect("workbench");
+    let row = model
+        .row_of_position(19, 0, usize::from(rects.editor.height))
+        .expect("cursor row");
+    let cursor_y = rects.editor.y + u16::try_from(row).expect("row");
+    let text_x = rects.editor.x + model.gutter_width().min(rects.editor.width);
+    assert!(
+        geometry.popup.bottom() <= cursor_y,
+        "popup should flip above the cursor: {geometry:?}"
+    );
+    assert_eq!(geometry.popup.x, text_x);
+}
+
+#[test]
+fn completion_popup_shows_label_details_and_deprecation() {
+    let mut model = Model::new(EditorState::from_text("fo"), None);
+    model.start_page.welcome = false;
+    model.language.completion.completion = Some(crate::state::CompletionState {
+        items: vec![crate::state::CompletionItem {
+            source: anvil_session::provider::ProviderId::new("builtin.lsp"),
+            label: "foo".to_owned(),
+            filter_text: "foo".to_owned(),
+            sort_text: "foo".to_owned(),
+            preselect: true,
+            insert: "foo".to_owned(),
+            snippet: None,
+            detail: String::new(),
+            replace: None,
+            replace_bytes: None,
+            documentation: None,
+            raw: serde_json::json!({
+                "kind": 6,
+                "labelDetails": {"detail": "(T)", "description": "module"},
+                "tags": [1]
+            }),
+            resolved: true,
+        }],
+        filtered: vec![0],
+        query: "fo".to_owned(),
+        selected: 0,
+    });
+    let backend = TestBackend::new(100, 24);
+    let mut terminal = Terminal::new(backend).expect("terminal");
+    terminal.draw(|frame| view(&model, frame)).expect("draw");
+    let cells = terminal.backend().buffer().content();
+    let rendered = cells.iter().map(|cell| cell.symbol()).collect::<String>();
+    assert!(rendered.contains("foo(T)"), "{rendered}");
+    assert!(rendered.contains("module"), "{rendered}");
+    let deprecated: Vec<_> = cells
+        .iter()
+        .filter(|cell| cell.symbol() == "f")
+        .map(|cell| cell.modifier)
+        .collect();
+    assert!(
+        deprecated
+            .iter()
+            .any(|modifier| modifier.contains(ratatui::style::Modifier::CROSSED_OUT)),
+        "{deprecated:?}"
+    );
+}
+
+#[test]
+fn inline_completion_renders_ghost_and_tab_accepts() {
+    let mut model = Model::new(EditorState::from_text("pri"), None);
+    model.start_page.welcome = false;
+    model.ui.input_mode = InputMode::Insert;
+    model.session.cursor = 3;
+    model.language.completion.inline = Some(crate::state::InlineCompletionState {
+        text: "ntln".to_owned(),
+        revision: model.session.editor.revision(),
+        cursor: 3,
+        path: None,
+        replace: None,
+    });
+    let backend = TestBackend::new(100, 24);
+    let mut terminal = Terminal::new(backend).expect("terminal");
+    terminal.draw(|frame| view(&model, frame)).expect("draw");
+    let rendered = terminal
+        .backend()
+        .buffer()
+        .content()
+        .iter()
+        .map(|cell| cell.symbol())
+        .collect::<String>();
+    assert!(rendered.contains("ntln"), "{rendered}");
+    handle_event(&mut model, key(KeyCode::Tab));
+    let text = model.session.editor.text();
+    assert_eq!(text.slice(0..text.len_bytes()), "println");
+    assert!(model.language.completion.inline.is_none());
+}

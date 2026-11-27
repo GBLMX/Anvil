@@ -177,87 +177,249 @@ impl SnippetSession {
 }
 
 pub fn parse(text: &str) -> Result<Snippet, String> {
-    let mut output = String::with_capacity(text.len());
-    let mut stops = Vec::new();
-    let mut chars = text.char_indices().peekable();
-    while let Some((_index, character)) = chars.next() {
-        match character {
-            '\\' => match chars.next() {
-                Some((_, escaped @ ('$' | '}' | '\\'))) => output.push(escaped),
-                Some((_, escaped)) => {
-                    output.push('\\');
-                    output.push(escaped);
-                }
-                None => output.push('\\'),
-            },
-            '$' => {
-                let Some((next_index, next)) = chars.peek().copied() else {
-                    output.push('$');
-                    continue;
-                };
-                if next.is_ascii_digit() {
-                    let mut number = String::new();
-                    while let Some((_, digit)) = chars.peek().copied() {
-                        if !digit.is_ascii_digit() {
-                            break;
-                        }
-                        number.push(digit);
-                        chars.next();
-                    }
-                    let index = number.parse::<usize>().map_err(|_| "invalid tabstop")?;
-                    let at = output.len();
-                    stops.push(SnippetStop {
-                        index,
-                        start: at,
-                        end: at,
-                    });
-                    continue;
-                }
-                if next == '{' {
-                    let body_start = next_index + next.len_utf8();
-                    let Some(relative_end) = text[body_start..].find('}') else {
-                        return Err("unterminated placeholder".to_owned());
-                    };
-                    let body_end = body_start + relative_end;
-                    let body = &text[body_start..body_end];
-                    let (number, default) = body
-                        .split_once(':')
-                        .map_or((body, ""), |(number, default)| (number, default));
-                    let index = number
-                        .parse::<usize>()
-                        .map_err(|_| format!("unsupported snippet variable {number:?}"))?;
-                    if default.contains('$') || default.contains('}') {
-                        return Err("nested snippet placeholders are unsupported".to_owned());
-                    }
-                    let start = output.len();
-                    output.push_str(default);
-                    let end = output.len();
-                    stops.push(SnippetStop { index, start, end });
-                    for (position, _) in chars.by_ref() {
-                        if position == body_end {
-                            break;
-                        }
-                    }
-                    continue;
-                }
-                output.push('$');
-            }
-            _ => output.push(character),
-        }
-    }
-    let end = output.len();
-    if !stops.iter().any(|stop| stop.index == 0) {
-        stops.push(SnippetStop {
+    let mut parser = Parser {
+        chars: text.chars().collect(),
+        position: 0,
+        output: String::with_capacity(text.len()),
+        stops: Vec::new(),
+    };
+    parser.sequence(None)?;
+    let end = parser.output.len();
+    if !parser.stops.iter().any(|stop| stop.index == 0) {
+        parser.stops.push(SnippetStop {
             index: 0,
             start: end,
             end,
         });
     }
+    let mut stops = parser.stops;
     stops.sort_by_key(|stop| (stop.index == 0, stop.index));
     Ok(Snippet {
-        text: output,
+        text: parser.output,
         stops,
     })
+}
+
+struct Parser {
+    chars: Vec<char>,
+    position: usize,
+    output: String,
+    stops: Vec<SnippetStop>,
+}
+
+impl Parser {
+    fn peek(&self) -> Option<char> {
+        self.chars.get(self.position).copied()
+    }
+
+    fn next(&mut self) -> Option<char> {
+        let character = self.peek()?;
+        self.position += 1;
+        Some(character)
+    }
+
+    fn sequence(&mut self, terminator: Option<char>) -> Result<(), String> {
+        while let Some(character) = self.peek() {
+            if Some(character) == terminator {
+                self.position += 1;
+                return Ok(());
+            }
+            self.position += 1;
+            match character {
+                '\\' => match self.next() {
+                    Some(escaped @ ('$' | '}' | '\\')) => self.output.push(escaped),
+                    Some(escaped) => {
+                        self.output.push('\\');
+                        self.output.push(escaped);
+                    }
+                    None => self.output.push('\\'),
+                },
+                '$' => self.dollar()?,
+                _ => self.output.push(character),
+            }
+        }
+        if terminator.is_some() {
+            Err("unterminated placeholder".to_owned())
+        } else {
+            Ok(())
+        }
+    }
+
+    fn dollar(&mut self) -> Result<(), String> {
+        match self.peek() {
+            Some(character) if character.is_ascii_digit() => {
+                let index = self.number()?;
+                let at = self.output.len();
+                self.stops.push(SnippetStop {
+                    index,
+                    start: at,
+                    end: at,
+                });
+                Ok(())
+            }
+            Some('{') => {
+                self.position += 1;
+                self.braced()
+            }
+            Some(character) if is_variable_start(character) => {
+                let name = self.identifier();
+                self.output.push_str(&name);
+                Ok(())
+            }
+            _ => {
+                self.output.push('$');
+                Ok(())
+            }
+        }
+    }
+
+    fn braced(&mut self) -> Result<(), String> {
+        match self.peek() {
+            Some(character) if character.is_ascii_digit() => {
+                let index = self.number()?;
+                match self.peek() {
+                    Some('}') => {
+                        self.position += 1;
+                        let at = self.output.len();
+                        self.stops.push(SnippetStop {
+                            index,
+                            start: at,
+                            end: at,
+                        });
+                        Ok(())
+                    }
+                    Some(':') => {
+                        self.position += 1;
+                        let start = self.output.len();
+                        self.sequence(Some('}'))?;
+                        let end = self.output.len();
+                        self.stops.push(SnippetStop { index, start, end });
+                        Ok(())
+                    }
+                    Some('|') => {
+                        self.position += 1;
+                        self.choice(index)
+                    }
+                    _ => Err("invalid placeholder".to_owned()),
+                }
+            }
+            Some(character) if is_variable_start(character) => {
+                let name = self.identifier();
+                match self.peek() {
+                    Some('}') => {
+                        self.position += 1;
+                        self.output.push_str(&name);
+                        Ok(())
+                    }
+                    Some(':') => {
+                        self.position += 1;
+                        self.sequence(Some('}'))
+                    }
+                    Some('/') => {
+                        self.skip_to_closing_brace()?;
+                        self.output.push_str(&name);
+                        Ok(())
+                    }
+                    _ => Err("invalid snippet variable".to_owned()),
+                }
+            }
+            _ => Err("invalid snippet variable".to_owned()),
+        }
+    }
+
+    fn choice(&mut self, index: usize) -> Result<(), String> {
+        let start = self.output.len();
+        loop {
+            match self.next() {
+                Some('\\') => match self.next() {
+                    Some(escaped @ (',' | '|' | '}' | '\\' | '$')) => self.output.push(escaped),
+                    Some(escaped) => {
+                        self.output.push('\\');
+                        self.output.push(escaped);
+                    }
+                    None => return Err("unterminated choice".to_owned()),
+                },
+                Some(',') => {
+                    let end = self.output.len();
+                    self.stops.push(SnippetStop { index, start, end });
+                    loop {
+                        match self.next() {
+                            Some('|') => break,
+                            Some('\\') => {
+                                self.next();
+                            }
+                            Some(_) => {}
+                            None => return Err("unterminated choice".to_owned()),
+                        }
+                    }
+                    return match self.next() {
+                        Some('}') => Ok(()),
+                        _ => Err("unterminated choice".to_owned()),
+                    };
+                }
+                Some('|') => {
+                    let end = self.output.len();
+                    self.stops.push(SnippetStop { index, start, end });
+                    return match self.next() {
+                        Some('}') => Ok(()),
+                        _ => Err("unterminated choice".to_owned()),
+                    };
+                }
+                Some('}') => {
+                    let end = self.output.len();
+                    self.stops.push(SnippetStop { index, start, end });
+                    return Ok(());
+                }
+                Some(character) => self.output.push(character),
+                None => return Err("unterminated choice".to_owned()),
+            }
+        }
+    }
+
+    fn skip_to_closing_brace(&mut self) -> Result<(), String> {
+        let mut escaped = false;
+        while let Some(character) = self.next() {
+            if escaped {
+                escaped = false;
+                continue;
+            }
+            match character {
+                '\\' => escaped = true,
+                '}' => return Ok(()),
+                _ => {}
+            }
+        }
+        Err("unterminated snippet variable".to_owned())
+    }
+
+    fn number(&mut self) -> Result<usize, String> {
+        let mut number = String::new();
+        while let Some(character) = self.peek() {
+            if !character.is_ascii_digit() {
+                break;
+            }
+            number.push(character);
+            self.position += 1;
+        }
+        number.parse().map_err(|_| "invalid tabstop".to_owned())
+    }
+
+    fn identifier(&mut self) -> String {
+        let mut name = String::new();
+        while let Some(character) = self.peek() {
+            if character.is_alphanumeric() || character == '_' {
+                name.push(character);
+                self.position += 1;
+            } else {
+                break;
+            }
+        }
+        name
+    }
+}
+
+fn is_variable_start(character: char) -> bool {
+    character.is_alphabetic() || character == '_'
 }
 
 #[cfg(test)]
@@ -312,10 +474,53 @@ mod tests {
     }
 
     #[test]
-    fn rejects_unsupported_variables_and_nesting() {
-        assert!(parse("${TM_FILENAME}").is_err());
-        assert!(parse("${1:${2:x}}").is_err());
-        assert!(parse("$1 ${1:name}").is_ok());
+    fn parses_choices_nested_placeholders_and_variables() {
+        let choice = parse("${1|one,two|}").expect("choice");
+        assert_eq!(choice.text, "one");
+        assert_eq!(
+            choice.stops,
+            vec![
+                SnippetStop {
+                    index: 1,
+                    start: 0,
+                    end: 3
+                },
+                SnippetStop {
+                    index: 0,
+                    start: 3,
+                    end: 3
+                },
+            ]
+        );
+
+        let nested = parse("${1:${2:x}}").expect("nested");
+        assert_eq!(nested.text, "x");
+        assert_eq!(
+            nested.stops,
+            vec![
+                SnippetStop {
+                    index: 1,
+                    start: 0,
+                    end: 1
+                },
+                SnippetStop {
+                    index: 2,
+                    start: 0,
+                    end: 1
+                },
+                SnippetStop {
+                    index: 0,
+                    start: 1,
+                    end: 1
+                },
+            ]
+        );
+
+        let variable = parse("${TM_FILENAME:name.txt}").expect("variable");
+        assert_eq!(variable.text, "name.txt");
+        assert!(parse("${TM_FILENAME}").is_ok());
+        assert!(parse("$TM_FILENAME").is_ok());
+        assert!(parse("${TM_FILENAME/(.*)\\..+$/$1/}").is_ok());
     }
 
     #[test]

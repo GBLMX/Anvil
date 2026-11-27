@@ -70,6 +70,20 @@ pub(crate) fn handle_mouse(model: &mut Model, mouse: MouseEvent, width: u16, hei
     if crate::command_line::handle_completion_mouse(model, &mouse, area) {
         return true;
     }
+    if matches!(
+        mouse.kind,
+        MouseEventKind::ScrollUp | MouseEventKind::ScrollDown
+    ) && crate::render::completion_side_at(model, area, mouse.column, mouse.row)
+    {
+        let scroll = &mut model.language.completion.documentation_scroll;
+        match mouse.kind {
+            MouseEventKind::ScrollUp => *scroll = scroll.saturating_sub(1),
+            MouseEventKind::ScrollDown => *scroll = scroll.saturating_add(1),
+            _ => {}
+        }
+        model.file.dirty = true;
+        return true;
+    }
     if model.language.completion.completion.is_some() {
         match mouse.kind {
             MouseEventKind::ScrollUp => {

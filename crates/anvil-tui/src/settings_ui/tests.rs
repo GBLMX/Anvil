@@ -153,22 +153,24 @@ fn settings_tabs_map_every_group() {
     assert_eq!(SettingsOverlayState::tab(0), "Editor");
     assert_eq!(SettingsOverlayState::tab(4), "Editor");
     assert_eq!(SettingsOverlayState::tab(5), "Editor");
-    assert_eq!(SettingsOverlayState::tab(6), "Language");
-    assert_eq!(SettingsOverlayState::tab(7), "Language");
-    assert_eq!(SettingsOverlayState::tab(8), "Interface");
-    assert_eq!(SettingsOverlayState::tab(10), "Editor");
-    assert_eq!(SettingsOverlayState::tab(11), "Interface");
-    assert_eq!(SettingsOverlayState::group(11), "Appearance");
+    for index in 6..=14 {
+        assert_eq!(SettingsOverlayState::tab(index), "Language");
+    }
+    assert_eq!(SettingsOverlayState::tab(15), "Interface");
+    assert_eq!(SettingsOverlayState::tab(16), "Interface");
+    assert_eq!(SettingsOverlayState::tab(17), "Editor");
+    assert_eq!(SettingsOverlayState::tab(18), "Interface");
+    assert_eq!(SettingsOverlayState::group(18), "Appearance");
 }
 
 #[test]
 fn settings_tab_cycle_wraps_both_directions() {
     let mut state = state_at(0);
-    for expected in [8, 6, 0] {
+    for expected in [15, 6, 0] {
         state.cycle_tab(false);
         assert_eq!(state.selected, expected);
     }
-    for expected in [6, 8, 0] {
+    for expected in [6, 15, 0] {
         state.cycle_tab(true);
         assert_eq!(state.selected, expected);
     }
@@ -231,7 +233,7 @@ fn reset_restores_draft_and_theme() {
     );
     assert!(!state.changed(0));
 
-    state.select(11);
+    state.select(18);
     state.adjust(1).expect("theme change");
     assert!(state.theme_touched);
     assert_ne!(state.theme, inherited.theme);

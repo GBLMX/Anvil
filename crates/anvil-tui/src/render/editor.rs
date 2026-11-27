@@ -218,6 +218,35 @@ pub fn view(model: &Model, frame: &mut Frame) {
         gutter_area,
     );
     let mut lines = model.visible_lines(content.height, text_area.width);
+    if let Some(inline) = &model.language.completion.inline
+        && matches!(model.ui.input_mode, InputMode::Insert)
+        && inline.revision == model.session.editor.revision()
+        && inline.cursor == model.session.cursor
+        && inline.path == model.session.path
+    {
+        let text = model.session.editor.text();
+        let rest = text.slice(inline.cursor..text.len_bytes());
+        if (rest.is_empty() || rest.starts_with('\n'))
+            && let Some(position) = model
+                .session
+                .editor
+                .index()
+                .position(model.session.editor.text(), inline.cursor)
+            && let Some(row) = model.row_of_position(
+                position.line,
+                position.display_column,
+                usize::from(content.height),
+            )
+            && let Some(line) = lines.get_mut(row)
+        {
+            line.spans.push(Span::styled(
+                format!(" {}", inline.text),
+                Style::default()
+                    .fg(theme::muted())
+                    .add_modifier(Modifier::ITALIC),
+            ));
+        }
+    }
     apply_code_block_background(model, &mut lines, text_area.width);
     frame.render_widget(Paragraph::new(lines).style(theme::text()), text_area);
     if let Some(area) = locations_area {

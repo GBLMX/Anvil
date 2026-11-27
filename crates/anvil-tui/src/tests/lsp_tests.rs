@@ -679,6 +679,54 @@ fn completion_resolve_updates_selected_item() {
 }
 
 #[test]
+fn completion_resolve_preserves_command() {
+    let mut model = Model::new(EditorState::from_text("x"), None);
+    model.language.completion.completion = Some(CompletionState {
+        items: vec![CompletionItem {
+            source: ProviderId::new("builtin.test"),
+            label: "item".to_owned(),
+            filter_text: "item".to_owned(),
+            sort_text: "item".to_owned(),
+            preselect: false,
+            insert: "item".to_owned(),
+            snippet: None,
+            detail: String::new(),
+            replace: None,
+            replace_bytes: None,
+            documentation: None,
+            raw: serde_json::json!({
+                "label": "item",
+                "command": {"command": "server.command", "arguments": [1]}
+            }),
+            resolved: false,
+        }],
+        filtered: vec![0],
+        query: String::new(),
+        selected: 0,
+    });
+    model
+        .language
+        .lsp_requests
+        .pending
+        .insert(8, LspRequestKind::CompletionResolve);
+    model.language.completion.resolve = Some((8, 0));
+    model.handle_lsp_response(8, serde_json::json!({"label": "item"}), None);
+    let item = &model
+        .language
+        .completion
+        .completion
+        .as_ref()
+        .expect("completion")
+        .items[0];
+    assert_eq!(
+        item.raw
+            .pointer("/command/command")
+            .and_then(|value| value.as_str()),
+        Some("server.command")
+    );
+}
+
+#[test]
 fn completion_documentation_is_rendered() {
     let mut model = Model::new(EditorState::from_text("x"), None);
     model.language.completion.completion = Some(CompletionState {
@@ -1734,6 +1782,486 @@ fn rename_response_rejects_a_stale_document_version() {
 }
 
 #[test]
+fn completion_applies_item_defaults_edit_range() {
+    let mut model = Model::new(EditorState::from_text("prin"), None);
+    model.session.cursor = 4;
+    model
+        .language
+        .lsp_requests
+        .pending
+        .insert(30, LspRequestKind::Completion);
+    model.handle_lsp_response(
+        30,
+        serde_json::json!({
+            "isIncomplete": false,
+            "itemDefaults": {
+                "editRange": {
+                    "start": {"line": 0, "character": 0},
+                    "end": {"line": 0, "character": 4}
+                },
+                "insertTextFormat": 2
+            },
+            "items": [{"label": "println!", "insertText": "println!($0)"}]
+        }),
+        None,
+    );
+    let completion = model
+        .language
+        .completion
+        .completion
+        .as_ref()
+        .expect("completion");
+    assert_eq!(completion.items[0].replace, Some((0, 0, 0, 4)));
+    assert!(completion.items[0].snippet.is_some());
+    model.apply_completion();
+    let text = model.session.editor.text();
+    assert_eq!(text.slice(0..text.len_bytes()), "println!()");
+}
+
+#[test]
+fn completion_applies_insert_replace_text_edit() {
+    let mut model = Model::new(EditorState::from_text("prin"), None);
+    model.session.cursor = 4;
+    model
+        .language
+        .lsp_requests
+        .pending
+        .insert(31, LspRequestKind::Completion);
+    model.handle_lsp_response(
+        31,
+        serde_json::json!({
+            "isIncomplete": false,
+            "items": [{
+                "label": "println",
+                "textEdit": {
+                    "newText": "println",
+                    "insert": {
+                        "start": {"line": 0, "character": 0},
+                        "end": {"line": 0, "character": 4}
+                    },
+                    "replace": {
+                        "start": {"line": 0, "character": 0},
+                        "end": {"line": 0, "character": 4}
+                    }
+                }
+            }]
+        }),
+        None,
+    );
+    let completion = model
+        .language
+        .completion
+        .completion
+        .as_ref()
+        .expect("completion");
+    assert_eq!(completion.items[0].replace, Some((0, 0, 0, 4)));
+    model.apply_completion();
+    let text = model.session.editor.text();
+    assert_eq!(text.slice(0..text.len_bytes()), "println");
+}
+
+#[test]
+fn completion_accept_replaces_text_typed_after_the_request() {
+    let mut model = Model::new(EditorState::from_text("prin"), None);
+    model.session.cursor = 4;
+    model.language.completion.completion = Some(CompletionState {
+        items: vec![CompletionItem {
+            source: ProviderId::new("builtin.test"),
+            label: "println".to_owned(),
+            filter_text: "println".to_owned(),
+            sort_text: "println".to_owned(),
+            preselect: false,
+            insert: "println".to_owned(),
+            snippet: None,
+            detail: String::new(),
+            replace: None,
+            replace_bytes: Some((0, 2)),
+            documentation: None,
+            raw: serde_json::Value::Null,
+            resolved: true,
+        }],
+        filtered: vec![0],
+        query: "pr".to_owned(),
+        selected: 0,
+    });
+    model.apply_completion();
+    let text = model.session.editor.text();
+    assert_eq!(text.slice(0..text.len_bytes()), "println");
+}
+
+#[test]
+fn empty_lsp_completion_keeps_local_items() {
+    let mut model = Model::new(EditorState::from_text("value value\nval"), None);
+    model.session.cursor = model.session.editor.text().len_bytes();
+    model.request_completion();
+    assert!(model.language.completion.completion.is_some());
+    model
+        .language
+        .lsp_requests
+        .pending
+        .insert(32, LspRequestKind::Completion);
+    model.handle_lsp_response(
+        32,
+        serde_json::json!({"isIncomplete": false, "items": []}),
+        None,
+    );
+    let completion = model
+        .language
+        .completion
+        .completion
+        .as_ref()
+        .expect("local completion survives an empty LSP list");
+    assert!(
+        completion
+            .items
+            .iter()
+            .any(|item| item.label == "value" && item.source.as_str() == "builtin.buffer-words")
+    );
+}
+
+#[test]
+fn incomplete_response_replaces_previous_lsp_items() {
+    let mut model = Model::new(EditorState::from_text("pr"), None);
+    model
+        .language
+        .lsp_requests
+        .pending
+        .insert(33, LspRequestKind::Completion);
+    model.handle_lsp_response(
+        33,
+        serde_json::json!({
+            "isIncomplete": true,
+            "items": [{"label": "first", "insertText": "first"}]
+        }),
+        None,
+    );
+    assert!(model.language.completion.incomplete);
+    model
+        .language
+        .lsp_requests
+        .pending
+        .insert(34, LspRequestKind::Completion);
+    model.handle_lsp_response(
+        34,
+        serde_json::json!({
+            "isIncomplete": false,
+            "items": [{"label": "second", "insertText": "second"}]
+        }),
+        None,
+    );
+    assert!(!model.language.completion.incomplete);
+    let completion = model
+        .language
+        .completion
+        .completion
+        .as_ref()
+        .expect("completion");
+    assert_eq!(
+        completion
+            .items
+            .iter()
+            .map(|item| item.label.as_str())
+            .collect::<Vec<_>>(),
+        vec!["second"]
+    );
+}
+
+#[test]
+fn completion_expands_callable_snippet_inside_parens() {
+    let mut model = Model::new(EditorState::from_text("pri"), None);
+    model.session.cursor = 3;
+    model
+        .language
+        .lsp_requests
+        .pending
+        .insert(35, LspRequestKind::Completion);
+    model.handle_lsp_response(
+        35,
+        serde_json::json!({
+            "isIncomplete": true,
+            "items": [{
+                "label": "print!(…)",
+                "kind": 3,
+                "detail": "macro_rules! print",
+                "insertTextFormat": 2,
+                "textEdit": {
+                    "newText": "print!($0)",
+                    "insert": {
+                        "start": {"line": 0, "character": 0},
+                        "end": {"line": 0, "character": 3}
+                    },
+                    "replace": {
+                        "start": {"line": 0, "character": 0},
+                        "end": {"line": 0, "character": 3}
+                    }
+                }
+            }]
+        }),
+        None,
+    );
+    model.apply_completion();
+    let text = model.session.editor.text();
+    assert_eq!(text.slice(0..text.len_bytes()), "print!()");
+    assert_eq!(model.session.cursor, 7);
+    assert!(model.language.completion.snippet.is_some());
+}
+
+#[test]
+fn completion_commit_character_accepts_and_inserts_the_character() {
+    let mut model = Model::new(EditorState::from_text("fo"), None);
+    model.ui.input_mode = InputMode::Insert;
+    model.session.cursor = 2;
+    model
+        .language
+        .lsp_requests
+        .pending
+        .insert(36, LspRequestKind::Completion);
+    model.handle_lsp_response(
+        36,
+        serde_json::json!({
+            "isIncomplete": false,
+            "itemDefaults": {"commitCharacters": [")"]},
+            "items": [{"label": "foo", "insertText": "foo"}]
+        }),
+        None,
+    );
+    let completion = model
+        .language
+        .completion
+        .completion
+        .as_ref()
+        .expect("completion");
+    assert_eq!(
+        completion.items[0].raw.get("commitCharacters"),
+        Some(&serde_json::json!([")"]))
+    );
+    handle_event(&mut model, key(KeyCode::Char(')')));
+    let text = model.session.editor.text();
+    assert_eq!(text.slice(0..text.len_bytes()), "foo)");
+    assert!(model.language.completion.completion.is_none());
+}
+
+#[test]
+fn completion_uses_server_all_commit_characters() {
+    let mut model = Model::new(EditorState::from_text("fo"), None);
+    model.ui.input_mode = InputMode::Insert;
+    model.session.cursor = 2;
+    let lsp_key = ("clangd".to_owned(), "c".to_owned(), PathBuf::from("/ws"));
+    model.language.lsp.config = Some(lsp_key.clone());
+    model
+        .language
+        .completion
+        .all_commit_characters
+        .insert(lsp_key, vec![")".to_owned()]);
+    model
+        .language
+        .lsp_requests
+        .pending
+        .insert(38, LspRequestKind::Completion);
+    model.handle_lsp_response(
+        38,
+        serde_json::json!({
+            "isIncomplete": false,
+            "items": [{"label": "foo", "insertText": "foo"}]
+        }),
+        None,
+    );
+    let completion = model
+        .language
+        .completion
+        .completion
+        .as_ref()
+        .expect("completion");
+    assert_eq!(
+        completion.items[0].raw.get("commitCharacters"),
+        Some(&serde_json::json!([")"]))
+    );
+    handle_event(&mut model, key(KeyCode::Char(')')));
+    let text = model.session.editor.text();
+    assert_eq!(text.slice(0..text.len_bytes()), "foo)");
+}
+
+#[test]
+fn completion_auto_brackets_is_opt_in_and_places_caret_inside() {
+    let item = || CompletionItem {
+        source: ProviderId::new("builtin.lsp"),
+        label: "getcwd".to_owned(),
+        filter_text: "getcwd".to_owned(),
+        sort_text: "getcwd".to_owned(),
+        preselect: false,
+        insert: "getcwd".to_owned(),
+        snippet: None,
+        detail: String::new(),
+        replace: None,
+        replace_bytes: None,
+        documentation: None,
+        raw: serde_json::json!({"kind": 3}),
+        resolved: true,
+    };
+    let mut off = Model::new(
+        EditorState::from_text("getc"),
+        Some(PathBuf::from("/tmp/a.py")),
+    );
+    off.session.cursor = 4;
+    off.language.completion.completion = Some(CompletionState {
+        items: vec![item()],
+        filtered: vec![0],
+        query: "getc".to_owned(),
+        selected: 0,
+    });
+    off.apply_completion();
+    let text = off.session.editor.text();
+    assert_eq!(text.slice(0..text.len_bytes()), "getcwd");
+
+    let mut on = Model::new(
+        EditorState::from_text("getc"),
+        Some(PathBuf::from("/tmp/a.py")),
+    );
+    on.session.cursor = 4;
+    on.config.settings.completion.auto_brackets = true;
+    on.language.completion.completion = Some(CompletionState {
+        items: vec![item()],
+        filtered: vec![0],
+        query: "getc".to_owned(),
+        selected: 0,
+    });
+    on.apply_completion();
+    let text = on.session.editor.text();
+    assert_eq!(text.slice(0..text.len_bytes()), "getcwd()");
+    assert_eq!(on.session.cursor, 7);
+}
+
+#[test]
+fn completion_auto_brackets_skips_tsx_components() {
+    let mut model = Model::new(
+        EditorState::from_text("Compo"),
+        Some(PathBuf::from("/tmp/a.tsx")),
+    );
+    model.session.cursor = 5;
+    model.config.settings.completion.auto_brackets = true;
+    model.language.completion.completion = Some(CompletionState {
+        items: vec![CompletionItem {
+            source: ProviderId::new("builtin.lsp"),
+            label: "Component".to_owned(),
+            filter_text: "Component".to_owned(),
+            sort_text: "Component".to_owned(),
+            preselect: false,
+            insert: "Component".to_owned(),
+            snippet: None,
+            detail: String::new(),
+            replace: None,
+            replace_bytes: None,
+            documentation: None,
+            raw: serde_json::json!({"kind": 3}),
+            resolved: true,
+        }],
+        filtered: vec![0],
+        query: "Compo".to_owned(),
+        selected: 0,
+    });
+    model.apply_completion();
+    let text = model.session.editor.text();
+    assert_eq!(text.slice(0..text.len_bytes()), "Component");
+}
+
+#[test]
+fn signature_help_retriggers_after_debounce() {
+    let mut model = Model::new(EditorState::from_text("foo("), None);
+    model.session.cursor = 4;
+    model.overlays.lsp_results.signature_help = Some(SignatureHelpState {
+        signatures: vec![SignatureItem {
+            label: "foo(x: i32)".to_owned(),
+            documentation: String::new(),
+            parameters: Vec::new(),
+        }],
+        active_signature: 0,
+        active_parameter: 0,
+    });
+    model.language.signature_help.signature = Some((model.session.editor.revision(), 3));
+    model.tick_signature_help();
+    assert!(model.language.signature_help.due.is_some());
+    model.tick_signature_help();
+    assert!(model.overlays.lsp_results.signature_help.is_some());
+    model.language.signature_help.due =
+        Some(std::time::Instant::now() - std::time::Duration::from_millis(1));
+    model.tick_signature_help();
+    assert!(model.overlays.lsp_results.signature_help.is_none());
+}
+
+#[test]
+fn signature_help_parses_parameter_ranges() {
+    let mut model = Model::new(EditorState::from_text("foo("), None);
+    model
+        .language
+        .lsp_requests
+        .pending
+        .insert(40, LspRequestKind::SignatureHelp);
+    model.handle_lsp_response(
+        40,
+        serde_json::json!({
+            "signatures": [{
+                "label": "foo(x: i32, y: i32)",
+                "parameters": [
+                    {"label": [4, 10]},
+                    {"label": [12, 18]}
+                ]
+            }],
+            "activeSignature": 0,
+            "activeParameter": 1
+        }),
+        None,
+    );
+    let signature = model
+        .overlays
+        .lsp_results
+        .signature_help
+        .as_ref()
+        .expect("signature");
+    assert_eq!(signature.active_parameter, 1);
+    assert_eq!(signature.signatures[0].parameters, vec![(4, 10), (12, 18)]);
+}
+
+#[test]
+fn signature_context_reports_trigger_kind_and_retrigger() {
+    let triggered = crate::lsp_ui::signature_help_context(Some("("), false);
+    assert_eq!(triggered["triggerKind"], 2);
+    assert_eq!(triggered["triggerCharacter"], "(");
+    assert_eq!(triggered["isRetrigger"], false);
+    let invoked = crate::lsp_ui::signature_help_context(None, true);
+    assert_eq!(invoked["triggerKind"], 1);
+    assert_eq!(invoked["isRetrigger"], true);
+}
+
+#[test]
+fn completion_adjusts_multiline_indentation() {
+    let mut model = Model::new(EditorState::from_text("    fo"), None);
+    model.session.cursor = 6;
+    model.language.completion.completion = Some(CompletionState {
+        items: vec![CompletionItem {
+            source: ProviderId::new("builtin.lsp"),
+            label: "foo".to_owned(),
+            filter_text: "foo".to_owned(),
+            sort_text: "foo".to_owned(),
+            preselect: false,
+            insert: "foo(\nbar\n)".to_owned(),
+            snippet: None,
+            detail: String::new(),
+            replace: None,
+            replace_bytes: None,
+            documentation: None,
+            raw: serde_json::json!({"kind": 6, "insertTextMode": 2}),
+            resolved: true,
+        }],
+        filtered: vec![0],
+        query: "fo".to_owned(),
+        selected: 0,
+    });
+    model.apply_completion();
+    let text = model.session.editor.text();
+    assert_eq!(text.slice(0..text.len_bytes()), "    foo(\n    bar\n    )");
+}
+
+#[test]
 fn completion_uses_sort_text_preselect_and_filter_text() {
     let mut model = Model::new(EditorState::from_text("x"), None);
     model
@@ -1782,6 +2310,192 @@ fn completion_uses_sort_text_preselect_and_filter_text() {
         .expect("completion");
     assert_eq!(completion.filtered.len(), 1);
     assert_eq!(completion.items[completion.filtered[0]].label, "alpha");
+}
+
+#[test]
+fn completion_empty_query_preserves_sort_text_order() {
+    let mut model = Model::new(EditorState::from_text(""), None);
+    model
+        .language
+        .lsp_requests
+        .pending
+        .insert(37, LspRequestKind::Completion);
+    model.handle_lsp_response(
+        37,
+        serde_json::json!({"items": [
+            {"label": "a", "sortText": "1"},
+            {"label": "zebra-long-name", "sortText": "0"},
+            {"label": "b", "sortText": "2"}
+        ]}),
+        None,
+    );
+    let completion = model
+        .language
+        .completion
+        .completion
+        .as_ref()
+        .expect("completion");
+    assert_eq!(
+        completion
+            .filtered
+            .iter()
+            .map(|index| completion.items[*index].label.as_str())
+            .collect::<Vec<_>>(),
+        vec!["zebra-long-name", "a", "b"]
+    );
+}
+
+#[test]
+fn completion_install_preselects_recent_label() {
+    let mut model = Model::new(EditorState::from_text(""), None);
+    model.language.completion.recent = Some("beta".to_owned());
+    let item = |label: &str| CompletionItem {
+        source: ProviderId::new("builtin.test"),
+        label: label.to_owned(),
+        filter_text: label.to_owned(),
+        sort_text: label.to_owned(),
+        preselect: false,
+        insert: label.to_owned(),
+        snippet: None,
+        detail: String::new(),
+        replace: None,
+        replace_bytes: None,
+        documentation: None,
+        raw: serde_json::Value::Null,
+        resolved: true,
+    };
+    model.install_completion(vec![item("alpha"), item("beta")]);
+    assert_eq!(
+        model
+            .language
+            .completion
+            .completion
+            .as_ref()
+            .expect("completion")
+            .selected,
+        1
+    );
+}
+
+#[test]
+fn keyword_completion_opens_after_its_deadline() {
+    let mut model = Model::new(EditorState::from_text("value value\nva"), None);
+    model.session.cursor = model.session.editor.text().len_bytes();
+    model.ui.input_mode = InputMode::Insert;
+    model.schedule_keyword_completion();
+    assert!(model.language.completion.keyword_due.is_some());
+    model.language.completion.keyword_due =
+        Some(std::time::Instant::now() - std::time::Duration::from_millis(1));
+    model.tick_keyword_completion();
+    let completion = model
+        .language
+        .completion
+        .completion
+        .as_ref()
+        .expect("keyword completion");
+    assert!(completion.items.iter().any(|item| item.label == "value"));
+}
+
+#[test]
+fn inline_completion_response_replaces_its_range() {
+    let mut model = Model::new(EditorState::from_text("pri"), None);
+    model.ui.input_mode = InputMode::Insert;
+    model.session.cursor = 3;
+    model
+        .language
+        .lsp_requests
+        .pending
+        .insert(41, LspRequestKind::InlineCompletion);
+    model
+        .language
+        .completion
+        .inline_requests
+        .insert(41, (model.session.editor.revision(), 3, None));
+    model.handle_lsp_response(
+        41,
+        serde_json::json!({
+            "items": [{
+                "insertText": "println",
+                "range": {
+                    "start": {"line": 0, "character": 0},
+                    "end": {"line": 0, "character": 3}
+                }
+            }]
+        }),
+        None,
+    );
+    assert!(model.language.completion.inline.is_some());
+    assert!(model.apply_inline_completion());
+    let text = model.session.editor.text();
+    assert_eq!(text.slice(0..text.len_bytes()), "println");
+    assert!(model.language.completion.inline.is_none());
+}
+
+#[test]
+fn stale_inline_completion_response_is_ignored() {
+    let mut model = Model::new(EditorState::from_text("pri"), None);
+    model.ui.input_mode = InputMode::Insert;
+    model.session.cursor = 3;
+    model
+        .language
+        .lsp_requests
+        .pending
+        .insert(42, LspRequestKind::InlineCompletion);
+    model
+        .language
+        .completion
+        .inline_requests
+        .insert(42, (model.session.editor.revision(), 3, None));
+    model.session.cursor = 1;
+    model.handle_lsp_response(
+        42,
+        serde_json::json!({"items": [{"insertText": "println"}]}),
+        None,
+    );
+    assert!(model.language.completion.inline.is_none());
+
+    model.session.cursor = 3;
+    model
+        .language
+        .lsp_requests
+        .pending
+        .insert(43, LspRequestKind::InlineCompletion);
+    model
+        .language
+        .completion
+        .inline_requests
+        .insert(43, (model.session.editor.revision(), 3, None));
+    let _ = model.session.editor.try_insert(3, "x");
+    model.handle_lsp_response(
+        43,
+        serde_json::json!({"items": [{"insertText": "println"}]}),
+        None,
+    );
+    assert!(model.language.completion.inline.is_none());
+}
+
+#[test]
+fn inline_response_only_consumes_its_own_request_metadata() {
+    let mut model = Model::new(EditorState::from_text("pri"), None);
+    model.ui.input_mode = InputMode::Insert;
+    model.session.cursor = 3;
+    model
+        .language
+        .lsp_requests
+        .pending
+        .insert(50, LspRequestKind::InlineCompletion);
+    model
+        .language
+        .completion
+        .inline_requests
+        .insert(51, (model.session.editor.revision(), 3, None));
+    model.handle_lsp_response(
+        50,
+        serde_json::json!({"items": [{"insertText": "println"}]}),
+        None,
+    );
+    assert!(model.language.completion.inline.is_none());
+    assert!(model.language.completion.inline_requests.contains_key(&51));
 }
 
 #[test]

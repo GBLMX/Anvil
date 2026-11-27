@@ -174,7 +174,7 @@ Insert mode
   Ctrl+n              LSP completion popup; next candidate when open
   Ctrl+Space          LSP completion popup (IME may intercept this)
   Ctrl+p              previous candidate when popup is open
-  . / :               auto-trigger completion in insert mode
+  . / : /             auto-trigger completion (plus server trigger chars)
   Enter               newline
   Tab / Shift-Tab     next / previous snippet placeholder or indent
   Backspace / Delete  delete grapheme

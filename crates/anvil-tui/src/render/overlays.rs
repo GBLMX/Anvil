@@ -87,6 +87,70 @@ fn completion_label_spans(label: &str, query: &str, style: Style) -> Vec<Span<'s
     ]
 }
 
+pub(crate) fn markdown_lines(text: &str) -> Vec<Line<'static>> {
+    let base = theme::panel().fg(theme::text_color());
+    let muted = theme::panel().fg(theme::muted());
+    let accent = theme::panel()
+        .fg(theme::accent())
+        .add_modifier(Modifier::BOLD);
+    let mut lines = Vec::new();
+    let mut fenced = false;
+    for raw in text.lines() {
+        let trimmed = raw.trim_start();
+        if trimmed.starts_with("```") {
+            fenced = !fenced;
+            lines.push(Line::styled(raw.to_owned(), muted));
+            continue;
+        }
+        if fenced {
+            lines.push(Line::styled(raw.to_owned(), muted));
+            continue;
+        }
+        if trimmed.starts_with('#') {
+            let heading = trimmed.trim_start_matches('#').trim_start();
+            lines.push(Line::styled(heading.to_owned(), accent));
+            continue;
+        }
+        if let Some(item) = trimmed
+            .strip_prefix("- ")
+            .or_else(|| trimmed.strip_prefix("* "))
+        {
+            let mut spans = vec![Span::styled("• ".to_owned(), accent)];
+            spans.extend(inline_markdown_spans(item, base));
+            lines.push(Line::from(spans));
+            continue;
+        }
+        lines.push(Line::from(inline_markdown_spans(raw, base)));
+    }
+    if lines.is_empty() {
+        lines.push(Line::styled(String::new(), base));
+    }
+    lines
+}
+
+fn inline_markdown_spans(text: &str, style: Style) -> Vec<Span<'static>> {
+    let mut spans = Vec::new();
+    let mut code = false;
+    for segment in text.split('`') {
+        if !segment.is_empty() {
+            spans.push(Span::styled(
+                segment.to_owned(),
+                if code {
+                    style.bg(theme::surface()).fg(theme::accent())
+                } else {
+                    style
+                },
+            ));
+        }
+        code = !code;
+    }
+    if spans.is_empty() {
+        spans.push(Span::styled(String::new(), style));
+    }
+    spans
+}
+
+#[derive(Debug)]
 pub(crate) struct CompletionGeometry {
     pub(crate) popup: Rect,
     pub(crate) visible: usize,
@@ -110,6 +174,16 @@ pub(crate) fn completion_geometry(model: &Model, area: Rect) -> Option<Completio
     let detail_panel = auto_import.map(|text| ("Auto-import", text)).or_else(|| {
         selected_item.and_then(|item| {
             let mut body = item.detail.clone();
+            if let Some(description) = item
+                .raw
+                .pointer("/labelDetails/description")
+                .and_then(serde_json::Value::as_str)
+            {
+                if !body.is_empty() {
+                    body.push_str("\n\n");
+                }
+                body.push_str(description);
+            }
             if let Some(documentation) = &item.documentation {
                 let documentation =
                     crate::completion_sources::clean_completion_documentation(documentation);
@@ -152,13 +226,34 @@ pub(crate) fn completion_geometry(model: &Model, area: Rect) -> Option<Completio
         .as_ref()
         .map(|(_, body)| body.lines().count() as u16 + 2)
         .unwrap_or(0);
-    let height = (completion.filtered.len() as u16 + 3 + extra)
+    let desired_height = (completion.filtered.len() as u16 + 3 + extra)
         .max(detail_height)
         .min(15)
         .min(area.height.saturating_sub(2));
+    let (cursor_x, cursor_y, text_area) = completion_cursor_anchor(model, area).unwrap_or((
+        area.x + area.width / 2,
+        area.y + area.height / 2,
+        area,
+    ));
+    let space_below = text_area
+        .bottom()
+        .saturating_sub(cursor_y.saturating_add(1));
+    let space_above = cursor_y.saturating_sub(text_area.y);
+    let (height, y) = if desired_height <= space_below || space_below >= space_above {
+        (
+            desired_height.min(space_below.max(3)),
+            cursor_y.saturating_add(1),
+        )
+    } else {
+        let height = desired_height.min(space_above.max(3));
+        (height, cursor_y.saturating_sub(height))
+    };
+    let x = cursor_x
+        .min(area.right().saturating_sub(total_width))
+        .max(area.x);
     let popup = Rect {
-        x: area.x + (area.width.saturating_sub(total_width)) / 2,
-        y: area.y + (area.height.saturating_sub(height)) / 2,
+        x,
+        y,
         width,
         height,
     };
@@ -181,6 +276,42 @@ pub(crate) fn completion_geometry(model: &Model, area: Rect) -> Option<Completio
     })
 }
 
+/// Screen position of the insertion cursor plus the editor text area.
+fn completion_cursor_anchor(model: &Model, area: Rect) -> Option<(u16, u16, Rect)> {
+    let rects = crate::layout::workbench_rects(model, area.width, area.height)?;
+    let editor = rects.editor;
+    let gutter = model.gutter_width().min(editor.width);
+    let text_area = Rect {
+        x: editor.x.saturating_add(gutter),
+        width: editor.width.saturating_sub(gutter),
+        ..editor
+    };
+    let position = model
+        .session
+        .editor
+        .index()
+        .position(model.session.editor.text(), model.session.cursor)?;
+    let row = model.row_of_position(
+        position.line,
+        position.display_column,
+        usize::from(editor.height),
+    )?;
+    let base = model
+        .position_at_visible_row(row)
+        .map_or(model.view.hscroll, |(_, base)| base);
+    let x = text_area.x.saturating_add(
+        u16::try_from(position.display_column.saturating_sub(base)).unwrap_or(u16::MAX),
+    );
+    let y = editor
+        .y
+        .saturating_add(u16::try_from(row).unwrap_or(u16::MAX));
+    Some((
+        x.min(area.right().saturating_sub(1)),
+        y.min(area.bottom().saturating_sub(1)),
+        text_area,
+    ))
+}
+
 pub(crate) fn completion_row_at(model: &Model, area: Rect, col: u16, row: u16) -> Option<usize> {
     let completion = model.language.completion.completion.as_ref()?;
     let geometry = completion_geometry(model, area)?;
@@ -195,6 +326,26 @@ pub(crate) fn completion_row_at(model: &Model, area: Rect, col: u16, row: u16) -
     }
     let index = geometry.start + usize::from(row - inner.y);
     (index < completion.filtered.len()).then_some(index)
+}
+
+pub(crate) fn completion_side_at(model: &Model, area: Rect, col: u16, row: u16) -> bool {
+    let Some(geometry) = completion_geometry(model, area) else {
+        return false;
+    };
+    if geometry.side_width == 0 {
+        return false;
+    }
+    let side = Rect {
+        x: geometry
+            .popup
+            .x
+            .saturating_add(geometry.popup.width)
+            .saturating_add(geometry.gap),
+        y: geometry.popup.y,
+        width: geometry.side_width,
+        height: geometry.popup.height,
+    };
+    crate::render::rect_contains(side, col, row)
 }
 
 pub(crate) fn render_overlays(model: &Model, frame: &mut Frame, area: Rect) {
@@ -750,12 +901,31 @@ pub(crate) fn render_overlays(model: &Model, frame: &mut Frame, area: Rect) {
             height,
         };
         frame.render_widget(Clear, popup);
-        let mut lines = vec![Line::styled(
-            item.label.clone(),
-            Style::default().fg(theme::accent()).bg(theme::surface()),
-        )];
+        let base = Style::default().fg(theme::accent()).bg(theme::surface());
+        let label_spans = item
+            .parameters
+            .get(signature.active_parameter)
+            .copied()
+            .filter(|(start, end)| {
+                start < end
+                    && *end <= item.label.len()
+                    && item.label.is_char_boundary(*start)
+                    && item.label.is_char_boundary(*end)
+            })
+            .map(|(start, end)| {
+                vec![
+                    Span::styled(item.label[..start].to_owned(), base),
+                    Span::styled(
+                        item.label[start..end].to_owned(),
+                        base.fg(theme::success()).add_modifier(Modifier::BOLD),
+                    ),
+                    Span::styled(item.label[end..].to_owned(), base),
+                ]
+            })
+            .unwrap_or_else(|| vec![Span::styled(item.label.clone(), base)]);
+        let mut lines = vec![Line::from(label_spans)];
         if !item.documentation.is_empty() {
-            lines.push(Line::raw(item.documentation.clone()));
+            lines.extend(markdown_lines(&item.documentation));
         }
         lines.push(Line::styled(
             format!("parameter {}", signature.active_parameter + 1),
@@ -855,8 +1025,29 @@ pub(crate) fn render_overlays(model: &Model, frame: &mut Frame, area: Rect) {
             let kind = completion_kind_label(item);
             let kind_width = unicode_width::UnicodeWidthStr::width(kind);
             let label_max = inner_width.saturating_sub(2 + kind_width + 2).max(1);
+            let deprecated = item
+                .raw
+                .get("deprecated")
+                .and_then(serde_json::Value::as_bool)
+                .unwrap_or(false)
+                || item
+                    .raw
+                    .get("tags")
+                    .and_then(serde_json::Value::as_array)
+                    .is_some_and(|tags| tags.iter().any(|tag| tag.as_u64() == Some(1)));
+            let style = if deprecated {
+                style.add_modifier(Modifier::CROSSED_OUT)
+            } else {
+                style
+            };
+            let label_details = item
+                .raw
+                .pointer("/labelDetails/detail")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or_default();
+            let display = format!("{}{}", item.label, label_details);
             let label = crate::render::truncate_width(
-                &item.label,
+                &display,
                 u16::try_from(label_max).unwrap_or(u16::MAX),
             );
             let label_width = unicode_width::UnicodeWidthStr::width(label.as_str());
@@ -928,9 +1119,10 @@ pub(crate) fn render_overlays(model: &Model, frame: &mut Frame, area: Rect) {
             };
             frame.render_widget(Clear, side);
             frame.render_widget(
-                Paragraph::new(body)
+                Paragraph::new(markdown_lines(&body))
                     .style(theme::panel())
                     .wrap(ratatui::widgets::Wrap { trim: false })
+                    .scroll((model.language.completion.documentation_scroll as u16, 0))
                     .block(crate::render::panel_block(Line::styled(
                         title,
                         theme::panel().fg(theme::accent()),

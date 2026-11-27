@@ -31,16 +31,25 @@ impl Model {
         method: &str,
         params: serde_json::Value,
     ) -> bool {
+        self.send_lsp_request_id(kind, method, params).is_some()
+    }
+
+    pub(crate) fn send_lsp_request_id(
+        &mut self,
+        kind: LspRequestKind,
+        method: &str,
+        params: serde_json::Value,
+    ) -> Option<u64> {
         let Some(path) = self.session.path.clone() else {
             self.status.text = "E: lsp requires an open file".to_owned();
             self.file.dirty = true;
-            return false;
+            return None;
         };
         let id = self.language.lsp_requests.reserve_request_id();
         if self.active_lsp_worker().is_none() {
             self.status.text = "E: lsp is not running".to_owned();
             self.file.dirty = true;
-            return false;
+            return None;
         }
         let text = self
             .session
@@ -50,23 +59,23 @@ impl Model {
         if let Err(error) = self.sync_lsp_document(&path, text) {
             self.status.text = format!("E: lsp request: {error}");
             self.file.dirty = true;
-            return false;
+            return None;
         }
         let Some(worker) = self.active_lsp_worker() else {
             self.status.text = "E: lsp is not running".to_owned();
             self.file.dirty = true;
-            return false;
+            return None;
         };
         if let Err(error) = worker.request(id, method, params) {
             self.status.text = format!("E: lsp request: {error}");
             self.file.dirty = true;
-            return false;
+            return None;
         }
         let request = PendingRequest::capture(kind, self.session.editor.revision(), path, || {
             self.buffer_revisions()
         });
         self.language.lsp_requests.track(id, request);
-        true
+        Some(id)
     }
     pub(crate) fn record_lsp_synced(&mut self, path: &Path) {
         if self.session.path.as_deref() == Some(path) {

@@ -27,6 +27,13 @@ const ENV_SEARCH_CASE_SENSITIVE: &str = "ANVIL_SEARCH_CASE_SENSITIVE";
 const ENV_INLAY_HINTS: &str = "ANVIL_LSP_INLAY_HINTS";
 const ENV_REDUCED_MOTION: &str = "ANVIL_REDUCED_MOTION";
 const ENV_HIGH_CONTRAST: &str = "ANVIL_HIGH_CONTRAST";
+const ENV_AUTO_BRACKETS: &str = "ANVIL_COMPLETION_AUTO_BRACKETS";
+const ENV_AUTO_POPUP: &str = "ANVIL_COMPLETION_AUTO_POPUP";
+const ENV_POPUP_DELAY_MS: &str = "ANVIL_COMPLETION_POPUP_DELAY_MS";
+const ENV_POPUP_TRIGGER_LEN: &str = "ANVIL_COMPLETION_POPUP_TRIGGER_LEN";
+const ENV_POPUP_IN_COMMENTS: &str = "ANVIL_COMPLETION_POPUP_IN_COMMENTS";
+const ENV_POPUP_IN_STRINGS: &str = "ANVIL_COMPLETION_POPUP_IN_STRINGS";
+const ENV_INLINE_COMPLETION: &str = "ANVIL_COMPLETION_INLINE_COMPLETION";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct EditorSettings {
@@ -47,6 +54,17 @@ pub(crate) struct SearchSettings {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct LspSettings {
     pub(crate) inlay_hints: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct CompletionSettings {
+    pub(crate) auto_brackets: bool,
+    pub(crate) auto_popup: bool,
+    pub(crate) popup_delay_ms: u16,
+    pub(crate) popup_trigger_len: usize,
+    pub(crate) popup_in_comments: bool,
+    pub(crate) popup_in_strings: bool,
+    pub(crate) inline_completion: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -109,6 +127,7 @@ pub(crate) struct Settings {
     pub(crate) editor: EditorSettings,
     pub(crate) search: SearchSettings,
     pub(crate) lsp: LspSettings,
+    pub(crate) completion: CompletionSettings,
     pub(crate) ui: UiSettings,
     pub(crate) watch: WatchSettings,
 }
@@ -130,6 +149,15 @@ impl Default for Settings {
                 case_sensitive: false,
             },
             lsp: LspSettings { inlay_hints: true },
+            completion: CompletionSettings {
+                auto_brackets: false,
+                auto_popup: true,
+                popup_delay_ms: 250,
+                popup_trigger_len: 2,
+                popup_in_comments: false,
+                popup_in_strings: false,
+                inline_completion: false,
+            },
             ui: UiSettings {
                 reduced_motion: false,
                 high_contrast: false,
@@ -264,6 +292,13 @@ pub(crate) enum SettingsKey {
     SidebarPercent,
     CaseSensitive,
     InlayHints,
+    AutoBrackets,
+    AutoPopup,
+    PopupDelay,
+    PopupTriggerLen,
+    PopupInComments,
+    PopupInStrings,
+    InlineCompletion,
     ReducedMotion,
     HighContrast,
     FileWatching,
@@ -504,6 +539,76 @@ pub(crate) const SETTINGS: &[SettingDef] = &[
         label: "lsp.inlay_hints",
         description: "Request and render language-server inlay hints.",
         group: "LSP",
+        tab: "Language",
+    },
+    SettingDef {
+        key: SettingsKey::AutoBrackets,
+        path: "completion.auto_brackets",
+        env: Some(ENV_AUTO_BRACKETS),
+        kind: SettingKind::Bool,
+        label: "completion.auto_brackets",
+        description: "Insert () after function, method, and constructor completions that omit it.",
+        group: "Completion",
+        tab: "Language",
+    },
+    SettingDef {
+        key: SettingsKey::AutoPopup,
+        path: "completion.auto_popup",
+        env: Some(ENV_AUTO_POPUP),
+        kind: SettingKind::Bool,
+        label: "completion.auto_popup",
+        description: "Show keyword completion after the configured idle delay.",
+        group: "Completion",
+        tab: "Language",
+    },
+    SettingDef {
+        key: SettingsKey::PopupDelay,
+        path: "completion.popup_delay_ms",
+        env: Some(ENV_POPUP_DELAY_MS),
+        kind: SettingKind::Integer { min: 0, max: 1000 },
+        label: "completion.popup_delay_ms",
+        description: "Idle delay before keyword completion opens.",
+        group: "Completion",
+        tab: "Language",
+    },
+    SettingDef {
+        key: SettingsKey::PopupTriggerLen,
+        path: "completion.popup_trigger_len",
+        env: Some(ENV_POPUP_TRIGGER_LEN),
+        kind: SettingKind::Integer { min: 1, max: 10 },
+        label: "completion.popup_trigger_len",
+        description: "Word characters required before keyword completion opens.",
+        group: "Completion",
+        tab: "Language",
+    },
+    SettingDef {
+        key: SettingsKey::PopupInComments,
+        path: "completion.popup_in_comments",
+        env: Some(ENV_POPUP_IN_COMMENTS),
+        kind: SettingKind::Bool,
+        label: "completion.popup_in_comments",
+        description: "Allow keyword completion inside comments.",
+        group: "Completion",
+        tab: "Language",
+    },
+    SettingDef {
+        key: SettingsKey::PopupInStrings,
+        path: "completion.popup_in_strings",
+        env: Some(ENV_POPUP_IN_STRINGS),
+        kind: SettingKind::Bool,
+        label: "completion.popup_in_strings",
+        description: "Allow keyword completion inside strings.",
+        group: "Completion",
+        tab: "Language",
+    },
+    SettingDef {
+        key: SettingsKey::InlineCompletion,
+        path: "completion.inline_completion",
+        env: Some(ENV_INLINE_COMPLETION),
+        kind: SettingKind::Bool,
+        label: "completion.inline_completion",
+        description: "Request inline (ghost-text) completion after the idle delay.",
+        group: "Completion",
         tab: "Language",
     },
     SettingDef {
@@ -1022,6 +1127,13 @@ fn settings_value(settings: &Settings, key: SettingsKey) -> String {
         SettingsKey::SidebarPercent => settings.editor.sidebar_percent.to_string(),
         SettingsKey::CaseSensitive => settings.search.case_sensitive.to_string(),
         SettingsKey::InlayHints => settings.lsp.inlay_hints.to_string(),
+        SettingsKey::AutoBrackets => settings.completion.auto_brackets.to_string(),
+        SettingsKey::AutoPopup => settings.completion.auto_popup.to_string(),
+        SettingsKey::PopupDelay => settings.completion.popup_delay_ms.to_string(),
+        SettingsKey::PopupTriggerLen => settings.completion.popup_trigger_len.to_string(),
+        SettingsKey::PopupInComments => settings.completion.popup_in_comments.to_string(),
+        SettingsKey::PopupInStrings => settings.completion.popup_in_strings.to_string(),
+        SettingsKey::InlineCompletion => settings.completion.inline_completion.to_string(),
         SettingsKey::ReducedMotion => settings.ui.reduced_motion.to_string(),
         SettingsKey::HighContrast => settings.ui.high_contrast.to_string(),
         SettingsKey::FileWatching => settings.editor.file_watching.to_string(),
@@ -1350,6 +1462,25 @@ fn mark_layer_sources(
         (SettingsKey::SidebarPercent, ["editor", "sidebar_percent"]),
         (SettingsKey::CaseSensitive, ["search", "case_sensitive"]),
         (SettingsKey::InlayHints, ["lsp", "inlay_hints"]),
+        (SettingsKey::AutoBrackets, ["completion", "auto_brackets"]),
+        (SettingsKey::AutoPopup, ["completion", "auto_popup"]),
+        (SettingsKey::PopupDelay, ["completion", "popup_delay_ms"]),
+        (
+            SettingsKey::PopupTriggerLen,
+            ["completion", "popup_trigger_len"],
+        ),
+        (
+            SettingsKey::PopupInComments,
+            ["completion", "popup_in_comments"],
+        ),
+        (
+            SettingsKey::PopupInStrings,
+            ["completion", "popup_in_strings"],
+        ),
+        (
+            SettingsKey::InlineCompletion,
+            ["completion", "inline_completion"],
+        ),
         (SettingsKey::ReducedMotion, ["ui", "reduced_motion"]),
         (SettingsKey::HighContrast, ["ui", "high_contrast"]),
         (SettingsKey::FileWatching, ["editor", "file_watching"]),
@@ -1497,6 +1628,43 @@ pub(crate) fn save_patch_to_path(path: &Path, patch: &SettingsPatch) -> Result<(
         patch.lsp.inlay_hints.is_some(),
         |table| set_patch_value(table, "inlay_hints", patch.lsp.inlay_hints),
     )?;
+
+    patch_table(
+        &mut document,
+        "completion",
+        patch.completion.auto_brackets.is_some()
+            || patch.completion.auto_popup.is_some()
+            || patch.completion.popup_delay_ms.is_some()
+            || patch.completion.popup_trigger_len.is_some()
+            || patch.completion.popup_in_comments.is_some()
+            || patch.completion.popup_in_strings.is_some()
+            || patch.completion.inline_completion.is_some(),
+        |table| {
+            set_patch_value(table, "auto_brackets", patch.completion.auto_brackets);
+            set_patch_value(table, "auto_popup", patch.completion.auto_popup);
+            set_patch_value(
+                table,
+                "popup_delay_ms",
+                patch.completion.popup_delay_ms.map(|value| value as i64),
+            );
+            set_patch_value(
+                table,
+                "popup_trigger_len",
+                patch.completion.popup_trigger_len.map(|value| value as i64),
+            );
+            set_patch_value(
+                table,
+                "popup_in_comments",
+                patch.completion.popup_in_comments,
+            );
+            set_patch_value(table, "popup_in_strings", patch.completion.popup_in_strings);
+            set_patch_value(
+                table,
+                "inline_completion",
+                patch.completion.inline_completion,
+            );
+        },
+    )?;
     patch_table(
         &mut document,
         "ui",
@@ -1575,7 +1743,10 @@ pub(crate) fn parse(text: &str) -> Result<Settings, String> {
         .parse::<toml_edit::DocumentMut>()
         .map_err(|error| format!("invalid settings TOML: {error}"))?;
     for (key, _) in document.iter() {
-        if !matches!(key, "theme" | "editor" | "search" | "lsp" | "ui" | "watch") {
+        if !matches!(
+            key,
+            "theme" | "editor" | "search" | "lsp" | "completion" | "ui" | "watch"
+        ) {
             return Err(format!("unknown settings section [{key}]"));
         }
     }
@@ -1626,6 +1797,37 @@ pub(crate) fn parse(text: &str) -> Result<Settings, String> {
     }
     if let Some(inlay_hints) = file.lsp.inlay_hints {
         settings.lsp.inlay_hints = inlay_hints;
+    }
+    if let Some(auto_brackets) = file.completion.auto_brackets {
+        settings.completion.auto_brackets = auto_brackets;
+    }
+    if let Some(auto_popup) = file.completion.auto_popup {
+        settings.completion.auto_popup = auto_popup;
+    }
+    if let Some(delay) = file.completion.popup_delay_ms {
+        if delay > 1000 {
+            return Err(format!(
+                "completion.popup_delay_ms must be 0..=1000, got {delay}"
+            ));
+        }
+        settings.completion.popup_delay_ms = delay;
+    }
+    if let Some(length) = file.completion.popup_trigger_len {
+        if !(1..=10).contains(&length) {
+            return Err(format!(
+                "completion.popup_trigger_len must be 1..=10, got {length}"
+            ));
+        }
+        settings.completion.popup_trigger_len = length;
+    }
+    if let Some(comments) = file.completion.popup_in_comments {
+        settings.completion.popup_in_comments = comments;
+    }
+    if let Some(strings) = file.completion.popup_in_strings {
+        settings.completion.popup_in_strings = strings;
+    }
+    if let Some(inline_completion) = file.completion.inline_completion {
+        settings.completion.inline_completion = inline_completion;
     }
     if let Some(reduced_motion) = file.ui.reduced_motion {
         settings.ui.reduced_motion = reduced_motion;
@@ -1731,6 +1933,43 @@ fn apply_env(
     }
     if let Some(value) = get(ENV_INLAY_HINTS) {
         settings.lsp.inlay_hints = parse_bool(ENV_INLAY_HINTS, &value)?;
+    }
+    if let Some(value) = get(ENV_AUTO_BRACKETS) {
+        settings.completion.auto_brackets = parse_bool(ENV_AUTO_BRACKETS, &value)?;
+    }
+    if let Some(value) = get(ENV_AUTO_POPUP) {
+        settings.completion.auto_popup = parse_bool(ENV_AUTO_POPUP, &value)?;
+    }
+    if let Some(value) = get(ENV_POPUP_DELAY_MS) {
+        let delay = value
+            .parse::<u16>()
+            .map_err(|_| format!("{ENV_POPUP_DELAY_MS} must be an integer 0..=1000"))?;
+        if delay > 1000 {
+            return Err(format!(
+                "{ENV_POPUP_DELAY_MS} must be 0..=1000, got {delay}"
+            ));
+        }
+        settings.completion.popup_delay_ms = delay;
+    }
+    if let Some(value) = get(ENV_POPUP_TRIGGER_LEN) {
+        let length = value
+            .parse::<usize>()
+            .map_err(|_| format!("{ENV_POPUP_TRIGGER_LEN} must be an integer 1..=10"))?;
+        if !(1..=10).contains(&length) {
+            return Err(format!(
+                "{ENV_POPUP_TRIGGER_LEN} must be 1..=10, got {length}"
+            ));
+        }
+        settings.completion.popup_trigger_len = length;
+    }
+    if let Some(value) = get(ENV_POPUP_IN_COMMENTS) {
+        settings.completion.popup_in_comments = parse_bool(ENV_POPUP_IN_COMMENTS, &value)?;
+    }
+    if let Some(value) = get(ENV_POPUP_IN_STRINGS) {
+        settings.completion.popup_in_strings = parse_bool(ENV_POPUP_IN_STRINGS, &value)?;
+    }
+    if let Some(value) = get(ENV_INLINE_COMPLETION) {
+        settings.completion.inline_completion = parse_bool(ENV_INLINE_COMPLETION, &value)?;
     }
     if let Some(value) = get(ENV_REDUCED_MOTION) {
         settings.ui.reduced_motion = parse_bool(ENV_REDUCED_MOTION, &value)?;
@@ -1931,6 +2170,7 @@ pub(crate) struct SettingsPatch {
     editor: EditorFile,
     search: SearchFile,
     lsp: LspFile,
+    completion: CompletionFile,
     ui: UiFile,
     watch: WatchFile,
 }
@@ -1968,6 +2208,18 @@ struct LspFile {
     inlay_hints: Option<bool>,
     commands: BTreeMap<String, LspCommandFile>,
     roots: BTreeMap<String, BTreeMap<String, LspRootProfileFile>>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+struct CompletionFile {
+    auto_brackets: Option<bool>,
+    auto_popup: Option<bool>,
+    popup_delay_ms: Option<u16>,
+    popup_trigger_len: Option<usize>,
+    popup_in_comments: Option<bool>,
+    inline_completion: Option<bool>,
+    popup_in_strings: Option<bool>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -2030,6 +2282,30 @@ impl SettingsPatch {
             }
             SettingsKey::CaseSensitive => self.search.case_sensitive.map(|value| value.to_string()),
             SettingsKey::InlayHints => self.lsp.inlay_hints.map(|value| value.to_string()),
+            SettingsKey::AutoBrackets => {
+                self.completion.auto_brackets.map(|value| value.to_string())
+            }
+            SettingsKey::AutoPopup => self.completion.auto_popup.map(|value| value.to_string()),
+            SettingsKey::PopupDelay => self
+                .completion
+                .popup_delay_ms
+                .map(|value| value.to_string()),
+            SettingsKey::PopupTriggerLen => self
+                .completion
+                .popup_trigger_len
+                .map(|value| value.to_string()),
+            SettingsKey::PopupInComments => self
+                .completion
+                .popup_in_comments
+                .map(|value| value.to_string()),
+            SettingsKey::PopupInStrings => self
+                .completion
+                .popup_in_strings
+                .map(|value| value.to_string()),
+            SettingsKey::InlineCompletion => self
+                .completion
+                .inline_completion
+                .map(|value| value.to_string()),
             SettingsKey::ReducedMotion => self.ui.reduced_motion.map(|value| value.to_string()),
             SettingsKey::HighContrast => self.ui.high_contrast.map(|value| value.to_string()),
             SettingsKey::FileWatching => self.editor.file_watching.map(|value| value.to_string()),
@@ -2055,6 +2331,27 @@ impl SettingsPatch {
                 self.search.case_sensitive = Some(settings.search.case_sensitive)
             }
             SettingsKey::InlayHints => self.lsp.inlay_hints = Some(settings.lsp.inlay_hints),
+            SettingsKey::AutoBrackets => {
+                self.completion.auto_brackets = Some(settings.completion.auto_brackets)
+            }
+            SettingsKey::AutoPopup => {
+                self.completion.auto_popup = Some(settings.completion.auto_popup)
+            }
+            SettingsKey::PopupDelay => {
+                self.completion.popup_delay_ms = Some(settings.completion.popup_delay_ms)
+            }
+            SettingsKey::PopupTriggerLen => {
+                self.completion.popup_trigger_len = Some(settings.completion.popup_trigger_len)
+            }
+            SettingsKey::PopupInComments => {
+                self.completion.popup_in_comments = Some(settings.completion.popup_in_comments)
+            }
+            SettingsKey::PopupInStrings => {
+                self.completion.popup_in_strings = Some(settings.completion.popup_in_strings)
+            }
+            SettingsKey::InlineCompletion => {
+                self.completion.inline_completion = Some(settings.completion.inline_completion)
+            }
             SettingsKey::ReducedMotion => self.ui.reduced_motion = Some(settings.ui.reduced_motion),
             SettingsKey::HighContrast => self.ui.high_contrast = Some(settings.ui.high_contrast),
             SettingsKey::FileWatching => {
@@ -2074,6 +2371,13 @@ impl SettingsPatch {
             SettingsKey::SidebarPercent => self.editor.sidebar_percent = None,
             SettingsKey::CaseSensitive => self.search.case_sensitive = None,
             SettingsKey::InlayHints => self.lsp.inlay_hints = None,
+            SettingsKey::AutoBrackets => self.completion.auto_brackets = None,
+            SettingsKey::AutoPopup => self.completion.auto_popup = None,
+            SettingsKey::PopupDelay => self.completion.popup_delay_ms = None,
+            SettingsKey::PopupTriggerLen => self.completion.popup_trigger_len = None,
+            SettingsKey::PopupInComments => self.completion.popup_in_comments = None,
+            SettingsKey::PopupInStrings => self.completion.popup_in_strings = None,
+            SettingsKey::InlineCompletion => self.completion.inline_completion = None,
             SettingsKey::ReducedMotion => self.ui.reduced_motion = None,
             SettingsKey::HighContrast => self.ui.high_contrast = None,
             SettingsKey::FileWatching => self.editor.file_watching = None,
@@ -2259,6 +2563,15 @@ mod tests {
                     case_sensitive: false,
                 },
                 lsp: LspSettings { inlay_hints: true },
+                completion: CompletionSettings {
+                    auto_brackets: false,
+                    auto_popup: true,
+                    popup_delay_ms: 250,
+                    popup_trigger_len: 2,
+                    popup_in_comments: false,
+                    popup_in_strings: false,
+                    inline_completion: false,
+                },
                 ui: UiSettings {
                     reduced_motion: false,
                     high_contrast: false,
@@ -2297,13 +2610,20 @@ mod tests {
             SettingsKey::SidebarPercent,
             SettingsKey::CaseSensitive,
             SettingsKey::InlayHints,
+            SettingsKey::AutoBrackets,
+            SettingsKey::AutoPopup,
+            SettingsKey::PopupDelay,
+            SettingsKey::PopupTriggerLen,
+            SettingsKey::PopupInComments,
+            SettingsKey::PopupInStrings,
+            SettingsKey::InlineCompletion,
             SettingsKey::ReducedMotion,
             SettingsKey::HighContrast,
             SettingsKey::FileWatching,
         ] {
             assert!(keys.contains(&key), "missing registry key: {key:?}");
         }
-        assert_eq!(keys.len(), 12);
+        assert_eq!(keys.len(), 19);
     }
 
     #[test]
@@ -2970,6 +3290,24 @@ mod tests {
     }
 
     #[test]
+    fn parses_completion_settings() {
+        let settings = parse(
+            "[completion]\nauto_brackets = true\nauto_popup = false\n\
+             popup_delay_ms = 50\npopup_trigger_len = 3\n\
+             popup_in_comments = true\npopup_in_strings = true\n\
+             inline_completion = true\n",
+        )
+        .expect("parse");
+        assert!(settings.completion.auto_brackets);
+        assert!(!settings.completion.auto_popup);
+        assert_eq!(settings.completion.popup_delay_ms, 50);
+        assert_eq!(settings.completion.popup_trigger_len, 3);
+        assert!(settings.completion.popup_in_comments);
+        assert!(settings.completion.popup_in_strings);
+        assert!(settings.completion.inline_completion);
+    }
+
+    #[test]
     fn save_writes_theme_and_domains() {
         let directory =
             std::env::temp_dir().join(format!("anvil-settings-save-{}", std::process::id()));
@@ -3361,6 +3699,9 @@ mod language_settings_tests {
 
     #[test]
     fn settings_check_reports_layers_fields_and_language_errors() {
+        let _guard = TEST_ENV_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         let dir = tempfile::tempdir().expect("tempdir");
         let report = settings_check(dir.path(), true);
         let json = report.to_json();
@@ -3378,6 +3719,9 @@ mod language_settings_tests {
 
     #[test]
     fn settings_check_reports_project_explicit_values() {
+        let _guard = TEST_ENV_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         let dir = tempfile::tempdir().expect("tempdir");
         fs::write(
             dir.path().join(PROJECT_SETTINGS),

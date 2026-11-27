@@ -7,6 +7,59 @@ use crate::{
 };
 use std::collections::HashMap;
 use std::path::PathBuf;
+fn completion_edit_range(value: &serde_json::Value) -> Option<(usize, usize, usize, usize)> {
+    let range = value
+        .get("range")
+        .or_else(|| value.get("replace"))
+        .or_else(|| value.get("insert"))
+        .unwrap_or(value);
+    let start = range.get("start")?;
+    let end = range.get("end")?;
+    Some((
+        start.get("line")?.as_u64()? as usize,
+        start.get("character")?.as_u64()? as usize,
+        end.get("line")?.as_u64()? as usize,
+        end.get("character")?.as_u64()? as usize,
+    ))
+}
+
+fn signature_parameter_ranges(signature: &serde_json::Value, label: &str) -> Vec<(usize, usize)> {
+    signature
+        .get("parameters")
+        .and_then(serde_json::Value::as_array)
+        .map(|parameters| {
+            parameters
+                .iter()
+                .filter_map(|parameter| match parameter.get("label")? {
+                    serde_json::Value::String(text) => {
+                        let start = label.find(text)?;
+                        Some((start, start + text.len()))
+                    }
+                    serde_json::Value::Array(range) => {
+                        let start = range.first()?.as_u64()?;
+                        let end = range.get(1)?.as_u64()?;
+                        Some((
+                            utf16_offset_to_byte(label, start),
+                            utf16_offset_to_byte(label, end),
+                        ))
+                    }
+                    _ => None,
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn utf16_offset_to_byte(text: &str, offset: u64) -> usize {
+    let mut units = 0u64;
+    for (index, character) in text.char_indices() {
+        if units >= offset {
+            return index;
+        }
+        units += character.len_utf16() as u64;
+    }
+    text.len()
+}
 
 impl Model {
     pub(crate) fn apply_document_symbols_response(&mut self, result: &serde_json::Value) {
@@ -75,9 +128,11 @@ impl Model {
                     .get("documentation")
                     .map(hover_text)
                     .unwrap_or_default();
+                let parameters = signature_parameter_ranges(signature, &label);
                 Some(SignatureItem {
                     label,
                     documentation,
+                    parameters,
                 })
             })
             .collect();
@@ -166,6 +221,10 @@ impl Model {
             if request.kind == LspRequestKind::CompletionResolve {
                 self.language.completion.resolve = None;
             }
+            if request.kind == LspRequestKind::InlineCompletion {
+                self.language.completion.inline = None;
+                self.language.completion.inline_requests.remove(&id);
+            }
             if request.kind == LspRequestKind::StickySymbols {
                 self.overlays.lsp_results.sticky_pending = false;
                 self.file.dirty = true;
@@ -204,6 +263,10 @@ impl Model {
             LspRequestKind::Completion => self.apply_completion_response(&result),
             LspRequestKind::CompletionResolve => {
                 self.apply_completion_resolve_response(id, &result);
+            }
+            LspRequestKind::InlineCompletion => {
+                let request = self.language.completion.inline_requests.remove(&id);
+                self.apply_inline_completion_response(&result, request);
             }
             LspRequestKind::Definition => self.apply_goto_response(&result, "definition"),
             LspRequestKind::Declaration => self.apply_goto_response(&result, "declaration"),
@@ -251,6 +314,9 @@ impl Model {
                 self.status.text = "code lens command executed".to_owned();
                 self.request_code_lens();
             }
+            LspRequestKind::CompletionCommand => {
+                self.status.text = "completion command executed".to_owned();
+            }
             LspRequestKind::CodeActionCommand => {
                 self.status.text = "code action command executed".to_owned();
             }
@@ -277,6 +343,31 @@ impl Model {
             self.status.text = "E: lsp: invalid completion response".to_owned();
             return;
         };
+        let defaults = result.get("itemDefaults");
+        let default_edit_range = defaults
+            .and_then(|defaults| defaults.get("editRange"))
+            .and_then(completion_edit_range);
+        let default_insert_format = defaults
+            .and_then(|defaults| defaults.get("insertTextFormat"))
+            .and_then(serde_json::Value::as_u64);
+        let default_insert_text_mode = defaults
+            .and_then(|defaults| defaults.get("insertTextMode"))
+            .and_then(serde_json::Value::as_u64);
+        let default_commit_characters = defaults
+            .and_then(|defaults| defaults.get("commitCharacters"))
+            .cloned();
+        let all_commit_characters = self
+            .language
+            .lsp
+            .config
+            .as_ref()
+            .and_then(|key| self.language.completion.all_commit_characters.get(key))
+            .cloned()
+            .map(serde_json::Value::from);
+        let is_incomplete = result
+            .get("isIncomplete")
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false);
         let items: Vec<CompletionItem> = items
             .iter()
             .take(2000)
@@ -296,23 +387,30 @@ impl Model {
                     .get("preselect")
                     .and_then(serde_json::Value::as_bool)
                     .unwrap_or(false);
-                let insert = item
-                    .get("textEdit")
+                let text_edit = item.get("textEdit");
+                let insert = text_edit
                     .and_then(|edit| edit.get("newText"))
                     .and_then(serde_json::Value::as_str)
                     .or_else(|| item.get("insertText").and_then(serde_json::Value::as_str))
+                    .or_else(|| item.get("textEditText").and_then(serde_json::Value::as_str))
                     .unwrap_or(&label)
                     .to_owned();
-                let snippet = (item
+                let insert_format = item
                     .get("insertTextFormat")
                     .and_then(serde_json::Value::as_u64)
-                    == Some(2))
-                .then(|| crate::snippet::parse(&insert).ok())
-                .flatten();
-                let insert = snippet
-                    .as_ref()
-                    .map(|snippet| snippet.text.clone())
-                    .unwrap_or_else(|| expand_snippet(&insert));
+                    .or(default_insert_format);
+                let is_snippet = insert_format == Some(2);
+                let snippet = is_snippet
+                    .then(|| crate::snippet::parse(&insert).ok())
+                    .flatten();
+                let insert = if is_snippet {
+                    snippet
+                        .as_ref()
+                        .map(|snippet| snippet.text.clone())
+                        .unwrap_or(insert)
+                } else {
+                    expand_snippet(&insert)
+                };
                 let detail = item
                     .get("detail")
                     .and_then(serde_json::Value::as_str)
@@ -322,19 +420,22 @@ impl Model {
                     .get("documentation")
                     .map(hover_text)
                     .filter(|text| !text.is_empty());
-                let replace = item
-                    .get("textEdit")
-                    .and_then(|edit| edit.get("range"))
-                    .and_then(|range| {
-                        let start = range.get("start")?;
-                        let end = range.get("end")?;
-                        Some((
-                            start.get("line")?.as_u64()? as usize,
-                            start.get("character")?.as_u64()? as usize,
-                            end.get("line")?.as_u64()? as usize,
-                            end.get("character")?.as_u64()? as usize,
-                        ))
-                    });
+                let replace = text_edit
+                    .and_then(completion_edit_range)
+                    .or(default_edit_range);
+                let mut raw = item.clone();
+                if raw.get("commitCharacters").is_none()
+                    && let Some(characters) = default_commit_characters
+                        .as_ref()
+                        .or(all_commit_characters.as_ref())
+                {
+                    raw["commitCharacters"] = characters.clone();
+                }
+                if raw.get("insertTextMode").is_none()
+                    && let Some(mode) = default_insert_text_mode
+                {
+                    raw["insertTextMode"] = serde_json::Value::from(mode);
+                }
                 Some(CompletionItem {
                     source: anvil_session::provider::ProviderId::new("builtin.lsp"),
                     label,
@@ -347,18 +448,25 @@ impl Model {
                     replace,
                     replace_bytes: None,
                     documentation,
-                    raw: item.clone(),
+                    raw,
                     resolved: false,
                 })
             })
             .collect();
-        let mut merged = self
-            .language
-            .completion
-            .completion
-            .take()
+        let previous = self.language.completion.completion.take();
+        let previous_selected = previous.as_ref().and_then(|completion| {
+            completion
+                .filtered
+                .get(completion.selected)
+                .and_then(|index| completion.items.get(*index))
+                .map(|item| item.label.clone())
+        });
+        let mut merged = previous
             .map(|completion| completion.items)
-            .unwrap_or_default();
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|item| item.source.as_str() != "builtin.lsp")
+            .collect::<Vec<_>>();
         for item in items {
             if merged
                 .iter()
@@ -375,6 +483,7 @@ impl Model {
                 .then_with(|| left.label.cmp(&right.label))
         });
         items.truncate(200);
+        self.language.completion.incomplete = is_incomplete;
         if items.is_empty() {
             self.status.text = "lsp: no completions".to_owned();
             self.language.completion.completion = None;
@@ -386,7 +495,15 @@ impl Model {
                 self.session.cursor,
             );
             let filtered = (0..items.len()).collect();
-            let selected = items.iter().position(|item| item.preselect).unwrap_or(0);
+            let recent = self.language.completion.recent.clone();
+            let selected = previous_selected
+                .and_then(|label| items.iter().position(|item| item.label == label))
+                .or_else(|| items.iter().position(|item| item.preselect))
+                .or_else(|| {
+                    recent.and_then(|label| items.iter().position(|item| item.label == label))
+                })
+                .unwrap_or(0);
+            self.language.completion.documentation_scroll = 0;
             self.language.completion.completion = Some(CompletionState {
                 items,
                 filtered,
@@ -426,8 +543,76 @@ impl Model {
         {
             raw["additionalTextEdits"] = edits;
         }
+        if raw.get("command").is_none()
+            && let Some(command) = item.raw.get("command").cloned()
+        {
+            raw["command"] = command;
+        }
         item.raw = raw;
         item.resolved = true;
+        self.file.dirty = true;
+    }
+
+    fn apply_inline_completion_response(
+        &mut self,
+        result: &serde_json::Value,
+        request: Option<(u64, usize, Option<PathBuf>)>,
+    ) {
+        let Some((revision, cursor, path)) = request else {
+            self.language.completion.inline = None;
+            return;
+        };
+        if revision != self.session.editor.revision()
+            || cursor != self.session.cursor
+            || path != self.session.path
+        {
+            self.language.completion.inline = None;
+            return;
+        }
+        if !matches!(self.ui.input_mode, InputMode::Insert)
+            || self.language.completion.completion.is_some()
+            || self.language.completion.snippet.is_some()
+        {
+            self.language.completion.inline = None;
+            return;
+        }
+        let item = result
+            .get("items")
+            .and_then(serde_json::Value::as_array)
+            .and_then(|items| items.first());
+        let Some(item) = item else {
+            self.language.completion.inline = None;
+            return;
+        };
+        let text = item
+            .get("insertText")
+            .and_then(|value| {
+                value
+                    .as_str()
+                    .or_else(|| value.get("value").and_then(serde_json::Value::as_str))
+            })
+            .unwrap_or_default();
+        if text.is_empty() {
+            self.language.completion.inline = None;
+            return;
+        }
+        let replace = item.get("range").and_then(|range| {
+            let start = range.get("start")?;
+            let end = range.get("end")?;
+            Some((
+                start.get("line")?.as_u64()? as usize,
+                start.get("character")?.as_u64()? as usize,
+                end.get("line")?.as_u64()? as usize,
+                end.get("character")?.as_u64()? as usize,
+            ))
+        });
+        self.language.completion.inline = Some(crate::state::InlineCompletionState {
+            text: text.to_owned(),
+            revision: self.session.editor.revision(),
+            cursor: self.session.cursor,
+            path: self.session.path.clone(),
+            replace,
+        });
         self.file.dirty = true;
     }
 

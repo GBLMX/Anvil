@@ -25,6 +25,9 @@ pub use editor::view;
 #[cfg(test)]
 pub(crate) use overlays::completion_geometry;
 pub(crate) use overlays::completion_row_at;
+pub(crate) use overlays::completion_side_at;
+#[cfg(test)]
+pub(crate) use overlays::markdown_lines;
 use overlays::render_overlays;
 use panes::{render_pipe_locations, render_split_pane};
 use tree::render_tree;

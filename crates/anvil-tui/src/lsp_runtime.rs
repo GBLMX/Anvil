@@ -68,6 +68,12 @@ impl Model {
             .status
             .insert(active.clone(), LspStatus::Stopped { root });
         self.language.inlay_hints.support.remove(&active);
+        self.language.completion.support.remove(&active);
+        self.language
+            .completion
+            .all_commit_characters
+            .remove(&active);
+        self.language.signature_help.support.remove(&active);
     }
 
     pub(crate) fn stop_lsp_root(&mut self, root: &Path) {
@@ -90,6 +96,9 @@ impl Model {
             self.language.lsp.status.remove(&key);
             self.language.lsp.retries.remove(&key);
             self.language.inlay_hints.support.remove(&key);
+            self.language.completion.support.remove(&key);
+            self.language.completion.all_commit_characters.remove(&key);
+            self.language.signature_help.support.remove(&key);
             self.language.lsp.labels.remove(&key);
             if self.language.lsp.config.as_ref() == Some(&key) {
                 clear_ui = true;
@@ -469,6 +478,9 @@ impl Model {
                 .status
                 .insert(key.clone(), LspStatus::Stopped { root });
             self.language.inlay_hints.support.remove(&key);
+            self.language.completion.support.remove(&key);
+            self.language.completion.all_commit_characters.remove(&key);
+            self.language.signature_help.support.remove(&key);
         }
         self.language.lsp.pending_sync = None;
         self.clear_lsp_ui();
@@ -498,6 +510,29 @@ impl Model {
                     .inlay_hints
                     .support
                     .insert(key.clone(), inlay_hints);
+                if let Some(capabilities) = self
+                    .language
+                    .lsp
+                    .workers
+                    .get(key)
+                    .and_then(|worker| worker.capabilities())
+                {
+                    self.language
+                        .completion
+                        .support
+                        .insert(key.clone(), capabilities.completion_trigger_characters);
+                    self.language
+                        .completion
+                        .all_commit_characters
+                        .insert(key.clone(), capabilities.completion_all_commit_characters);
+                    self.language.signature_help.support.insert(
+                        key.clone(),
+                        crate::state::SignatureHelpTriggers {
+                            trigger_characters: capabilities.signature_help_trigger_characters,
+                            retrigger_characters: capabilities.signature_help_retrigger_characters,
+                        },
+                    );
+                }
                 if active {
                     if let Some(info) = server_info {
                         self.status.text = format!("lsp: {info}");
@@ -1132,6 +1167,103 @@ mod status_tests {
         .expect("worker")
     }
 
+    #[test]
+    fn detailed_capabilities_reach_completion_state() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let root = dir.path().canonicalize().expect("canonical");
+        let file = root.join("main.c");
+        std::fs::write(&file, "int main(void) { return 0; }").expect("file");
+        let socket = root.join("gateway.sock");
+        std::thread::scope(|scope| {
+            let listener = Listener::bind(&socket).expect("bind");
+            scope.spawn(move || {
+                let mut connection = listener.accept().expect("accept");
+                while let Ok(Some(frame)) = connection.recv() {
+                    let request: serde_json::Value =
+                        serde_json::from_slice(&frame).expect("request");
+                    let response = json!({
+                        "jsonrpc": "2.0",
+                        "id": request.get("id").cloned().unwrap_or(serde_json::Value::Null),
+                        "result": {"ok": true}
+                    });
+                    connection
+                        .send(&serde_json::to_vec(&response).expect("response"))
+                        .expect("send");
+                    if request["params"]["data"]["method"] == "initialize" {
+                        let notification = json!({
+                            "jsonrpc": "2.0",
+                            "method": "lsp.message",
+                            "params": {"data": {
+                                "jsonrpc": "2.0",
+                                "id": 1,
+                                "result": {"capabilities": {
+                                    "completionProvider": {
+                                        "triggerCharacters": [".", "::"],
+                                        "allCommitCharacters": [")", ";"]
+                                    },
+                                    "signatureHelpProvider": {
+                                        "triggerCharacters": ["(", ","],
+                                        "retriggerCharacters": [","]
+                                    }
+                                }}
+                            }}
+                        });
+                        connection
+                            .send(
+                                &serde_json::to_vec(&notification)
+                                    .expect("initialization notification"),
+                            )
+                            .expect("send");
+                    }
+                }
+            });
+
+            let key = ("clangd".to_owned(), "c".to_owned(), root.clone());
+            let worker = fake_lsp_worker(&socket, &root, &file);
+            for _ in 0..200 {
+                if worker.capabilities().is_some() {
+                    break;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(5));
+            }
+            assert!(worker.capabilities().is_some());
+
+            let mut model = Model::new(EditorState::from_text(""), Some(file));
+            model.workspace.path = root;
+            model.language.lsp.config = Some(key.clone());
+            model.language.lsp.workers.insert(key.clone(), worker);
+            for _ in 0..100 {
+                let events = model.language.lsp.workers.get(&key).expect("worker").poll();
+                for event in events {
+                    model.handle_lsp_event(&key, event);
+                }
+                if model.language.completion.support.contains_key(&key) {
+                    break;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(5));
+            }
+
+            assert_eq!(
+                model.language.completion.support.get(&key),
+                Some(&vec![".".to_owned(), "::".to_owned()])
+            );
+            assert_eq!(
+                model.language.completion.all_commit_characters.get(&key),
+                Some(&vec![")".to_owned(), ";".to_owned()])
+            );
+            let support = model
+                .language
+                .signature_help
+                .support
+                .get(&key)
+                .expect("signature support");
+            assert_eq!(
+                support.trigger_characters,
+                vec!["(".to_owned(), ",".to_owned()]
+            );
+            assert_eq!(support.retrigger_characters, vec![",".to_owned()]);
+        });
+    }
     #[test]
     fn two_roots_with_same_language_keep_the_existing_worker() {
         let first = tempfile::tempdir().expect("first root");

@@ -1290,6 +1290,44 @@ pub(crate) struct CompletionUiState {
     pub(crate) completion: Option<CompletionState>,
     pub(crate) resolve: Option<(u64, usize)>,
     pub(crate) snippet: Option<SnippetSession>,
+    /// Server-advertised trigger characters per language server.
+    pub(crate) support: HashMap<LspKey, Vec<String>>,
+    /// Server-wide commit characters per language server.
+    pub(crate) all_commit_characters: HashMap<LspKey, Vec<String>>,
+    /// Last accepted completion label, used to preselect it next time.
+    pub(crate) recent: Option<String>,
+    /// Pending keyword-popup deadline and the edit state it was scheduled for.
+    pub(crate) keyword_due: Option<Instant>,
+    pub(crate) keyword_signature: Option<(u64, usize)>,
+    /// Latest inline completion for the cursor, rendered as ghost text.
+    pub(crate) inline: Option<InlineCompletionState>,
+    /// Revision, cursor, and path captured for each in-flight inline request.
+    pub(crate) inline_requests: HashMap<u64, (u64, usize, Option<PathBuf>)>,
+    /// Scroll offset for the completion documentation side panel.
+    pub(crate) documentation_scroll: usize,
+    pub(crate) incomplete: bool,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct InlineCompletionState {
+    pub(crate) text: String,
+    pub(crate) revision: u64,
+    pub(crate) cursor: usize,
+    pub(crate) path: Option<PathBuf>,
+    pub(crate) replace: Option<(usize, usize, usize, usize)>,
+}
+
+#[derive(Clone, Debug, Default)]
+pub(crate) struct SignatureHelpTriggers {
+    pub(crate) trigger_characters: Vec<String>,
+    pub(crate) retrigger_characters: Vec<String>,
+}
+
+#[derive(Default)]
+pub(crate) struct SignatureHelpUiState {
+    pub(crate) support: HashMap<LspKey, SignatureHelpTriggers>,
+    pub(crate) due: Option<Instant>,
+    pub(crate) signature: Option<(u64, usize)>,
 }
 
 /// Semantic token legend, cached tokens, and the revision they describe.
@@ -1310,6 +1348,7 @@ pub(crate) struct LanguageState {
     pub(crate) inlay_hints: InlayHintsState,
     pub(crate) code_lens: Option<code_lens::CodeLensState>,
     pub(crate) completion: CompletionUiState,
+    pub(crate) signature_help: SignatureHelpUiState,
 }
 pub(crate) enum LspPollEffect {
     Event { key: LspKey, event: lsp::LspEvent },
@@ -1427,6 +1466,7 @@ pub(crate) struct SemanticToken {
 pub(crate) enum LspRequestKind {
     Completion,
     CompletionResolve,
+    InlineCompletion,
     SemanticTokens,
     Definition,
     Declaration,
@@ -1448,6 +1488,7 @@ pub(crate) enum LspRequestKind {
     WorkspaceSymbol,
     InlayHint,
     ExecuteCommand,
+    CompletionCommand,
     CodeActionCommand,
     CodeLens,
 }
@@ -1538,6 +1579,7 @@ pub(crate) struct CallHierarchyState {
 pub(crate) struct SignatureItem {
     pub(crate) label: String,
     pub(crate) documentation: String,
+    pub(crate) parameters: Vec<(usize, usize)>,
 }
 
 #[derive(Debug, Clone)]

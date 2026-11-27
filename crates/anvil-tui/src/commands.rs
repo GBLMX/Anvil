@@ -430,7 +430,9 @@ impl Model {
                     self.open_file(&path);
                 }
                 Effect::LspCompletion => self.request_completion(),
-                Effect::LspSignatureHelp(trigger) => self.request_signature_help(trigger),
+                Effect::LspSignatureHelp(trigger) => {
+                    self.request_signature_help(Some(trigger.to_string()))
+                }
                 Effect::LspDefinition => self.request_definition(),
                 Effect::LspDeclaration => self.request_declaration(),
                 Effect::LspTypeDefinition => self.request_type_definition(),

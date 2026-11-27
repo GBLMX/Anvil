@@ -844,15 +844,21 @@ fn handle_key(model: &mut Model, key: KeyPress) {
             }
             KeyCode::Enter => model.insert_text("\n"),
             KeyCode::Tab => {
-                if !model.next_snippet_stop() {
+                if !model.apply_inline_completion() && !model.next_snippet_stop() {
                     model.insert_text("    ");
                 }
             }
             KeyCode::BackTab => {
                 model.previous_snippet_stop();
             }
-            KeyCode::Backspace => model.backspace(),
-            KeyCode::Delete => model.delete_forward(),
+            KeyCode::Backspace => {
+                model.backspace();
+                model.schedule_keyword_completion();
+            }
+            KeyCode::Delete => {
+                model.delete_forward();
+                model.schedule_keyword_completion();
+            }
             KeyCode::Left => model.move_char(-1),
             KeyCode::Right => model.move_char(1),
             KeyCode::Up => model.move_line(-1),
@@ -863,9 +869,8 @@ fn handle_key(model: &mut Model, key: KeyPress) {
             KeyCode::Char('n') if control => model.queue_effect(Effect::LspCompletion),
             KeyCode::Char(character) if text_input => {
                 model.insert_auto_pair(character);
-                if matches!(character, '.' | ':') {
-                    model.auto_completion();
-                }
+                model.auto_completion();
+                model.schedule_keyword_completion();
             }
             _ => {}
         },

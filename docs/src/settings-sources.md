@@ -118,7 +118,7 @@ selected field's source. Saving still writes only the user global layer.
 
 ## Environment inventory
 
-Inventory date: 2026-11-24. The filter matters: a raw repository scan finds
+Inventory date: 2026-11-27. The filter matters: a raw repository scan finds
 **88 unique `ANVIL_*` tokens**, including sandbox, signing, gateway, CI, test,
 and documentation references. That is not a settings-field count.
 
@@ -127,15 +127,15 @@ It must be tracked and tested separately.
 
 | Class | Count | Variables |
 |---|---:|---|
-| Per-field editor/search/LSP behavior | 9 | `ANVIL_EDITOR_SCROLL_MARGIN`, `ANVIL_EDITOR_AUTO_SAVE`, `ANVIL_EDITOR_SOFT_WRAP`, `ANVIL_EDITOR_FORMAT_ON_SAVE`, `ANVIL_EDITOR_FILE_WATCHING`, `ANVIL_EDITOR_MAX_BUFFERS`, `ANVIL_EDITOR_SIDEBAR_PERCENT`, `ANVIL_SEARCH_CASE_SENSITIVE`, `ANVIL_LSP_INLAY_HINTS` |
+| Per-field editor/search/LSP/completion behavior | 16 | `ANVIL_EDITOR_SCROLL_MARGIN`, `ANVIL_EDITOR_AUTO_SAVE`, `ANVIL_EDITOR_SOFT_WRAP`, `ANVIL_EDITOR_FORMAT_ON_SAVE`, `ANVIL_EDITOR_FILE_WATCHING`, `ANVIL_EDITOR_MAX_BUFFERS`, `ANVIL_EDITOR_SIDEBAR_PERCENT`, `ANVIL_SEARCH_CASE_SENSITIVE`, `ANVIL_LSP_INLAY_HINTS`, `ANVIL_COMPLETION_AUTO_BRACKETS`, `ANVIL_COMPLETION_AUTO_POPUP`, `ANVIL_COMPLETION_POPUP_DELAY_MS`, `ANVIL_COMPLETION_POPUP_TRIGGER_LEN`, `ANVIL_COMPLETION_POPUP_IN_COMMENTS`, `ANVIL_COMPLETION_POPUP_IN_STRINGS`, `ANVIL_COMPLETION_INLINE_COMPLETION` |
 | Complete-file override | 1 | `ANVIL_SETTINGS` |
 | Presentation/bootstrap | 3 | `ANVIL_THEME`, `ANVIL_HIGH_CONTRAST`, `ANVIL_REDUCED_MOTION` |
 | LSP language command override | 15 | `ANVIL_LSP_RUST`, `ANVIL_LSP_GO`, `ANVIL_LSP_PYTHON`, `ANVIL_LSP_TYPESCRIPT`, `ANVIL_LSP_CLANGD`, `ANVIL_LSP_JAVA`, `ANVIL_LSP_LUA`, `ANVIL_LSP_JSON`, `ANVIL_LSP_YAML`, `ANVIL_LSP_SHELL`, `ANVIL_LSP_MARKDOWN`, `ANVIL_LSP_TOML`, `ANVIL_LSP_HTML`, `ANVIL_LSP_CSS`, `ANVIL_LSP_ZIG` |
 
-`anvil-tui/src/settings.rs` therefore contains 13 unique `ANVIL_*` names:
-9 per-field variables, `ANVIL_SETTINGS`, and 3 presentation variables. When
-ADR-0075 says "10 settings registry variables", that is 9 per-field variables
-plus the complete-file override, not 10 interchangeable per-field settings.
+`anvil-tui/src/settings.rs` therefore contains 20 unique `ANVIL_*` names:
+16 per-field variables, `ANVIL_SETTINGS`, and 3 presentation variables. The
+historical ADR-0075 phrase "10 settings registry variables" referred to the
+then-current 9 per-field variables plus the complete-file override.
 
 The LSP names are configured by `anvil-lsp-client/src/settings.rs`; they are
 language command overrides, not ordinary settings fields. A settings migration

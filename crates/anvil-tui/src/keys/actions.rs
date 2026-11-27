@@ -639,6 +639,8 @@ pub(super) enum CompletionAction {
     Cancel,
     Backspace,
     Insert(char),
+    DocumentationUp,
+    DocumentationDown,
     CancelAndPassThrough,
 }
 
@@ -652,8 +654,33 @@ pub(super) fn completion_action(key: KeyPress, text_input: bool) -> CompletionAc
         KeyCode::Enter | KeyCode::Tab => CompletionAction::Accept,
         KeyCode::Backspace => CompletionAction::Backspace,
         KeyCode::Char(character) if text_input => CompletionAction::Insert(character),
+        KeyCode::PageUp => CompletionAction::DocumentationUp,
+        KeyCode::PageDown => CompletionAction::DocumentationDown,
         _ => CompletionAction::CancelAndPassThrough,
     }
+}
+
+fn completion_commit_character(model: &Model, character: char) -> bool {
+    let Some(completion) = model.language.completion.completion.as_ref() else {
+        return false;
+    };
+    let Some(item) = completion
+        .filtered
+        .get(completion.selected)
+        .and_then(|index| completion.items.get(*index))
+    else {
+        return false;
+    };
+    item.raw
+        .get("commitCharacters")
+        .and_then(serde_json::Value::as_array)
+        .is_some_and(|characters| {
+            characters.iter().any(|value| {
+                value
+                    .as_str()
+                    .is_some_and(|value| value == character.to_string())
+            })
+        })
 }
 
 pub(super) fn execute_completion_action(model: &mut Model, action: CompletionAction) -> bool {
@@ -668,13 +695,40 @@ pub(super) fn execute_completion_action(model: &mut Model, action: CompletionAct
             }
             model.backspace();
             model.filter_completion();
+            model.request_completion_more();
         }
         CompletionAction::Insert(character) => {
+            if completion_commit_character(model, character) {
+                model.apply_completion();
+                model.insert_text(&character.to_string());
+                model.cancel_completion();
+                return true;
+            }
             if let Some(completion) = model.language.completion.completion.as_mut() {
                 completion.query.push(character);
             }
             model.insert_text(&character.to_string());
-            model.filter_completion();
+            if character.is_alphanumeric() || character == '_' {
+                model.filter_completion();
+                model.request_completion_more();
+            } else {
+                model.cancel_completion();
+                model.auto_completion();
+            }
+        }
+        CompletionAction::DocumentationUp => {
+            model.language.completion.documentation_scroll = model
+                .language
+                .completion
+                .documentation_scroll
+                .saturating_sub(1)
+        }
+        CompletionAction::DocumentationDown => {
+            model.language.completion.documentation_scroll = model
+                .language
+                .completion
+                .documentation_scroll
+                .saturating_add(1)
         }
         CompletionAction::CancelAndPassThrough => {
             model.cancel_completion();
