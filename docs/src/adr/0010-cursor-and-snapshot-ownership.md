@@ -1,8 +1,9 @@
 # ADR-0010: Core Owns Coordinates; the Editor Layer Owns Snapshots
 
-- Status: Accepted (owner; Phase 0.5 owner-only self-approval)
+- Status: Accepted (owner; Phase 0.5 owner-only self-approval); PR text
+  benchmark gate amended by ADR-0081
 - Date: 2026-10-30
-- Related: [ADR-0004](0004-text-model.md), [ADR-0008](0008-selection-first-interaction.md), [ADR-0009](0009-text-model-snapshot-gate.md)
+- Related: [ADR-0004](0004-text-model.md), [ADR-0008](0008-selection-first-interaction.md), [ADR-0009](0009-text-model-snapshot-gate.md), [ADR-0081](0081-stable-pr-benchmark-gate.md)
 
 ## Context
 
@@ -253,7 +254,8 @@ rule the text buffer follows. Rejected.
 - No test path requires TUI, Tokio, or a plugin runtime in `anvil-core`.
 
 The 100k/100 MB stress run is a manual or scheduled benchmark, not a PR CI
-gate. PR CI keeps the existing 10 MB p99 gate plus small normalization tests;
+gate. PR CI keeps the 10 MB p50 regression gate plus small normalization
+tests; p95/p99 remain reported and are measured on controlled runs (ADR-0081);
 enable a nightly run only after its measured runtime is acceptable.
 
 ## Sign-off

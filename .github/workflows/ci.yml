@@ -60,13 +60,13 @@ jobs:
           fetch-depth: 0
       - name: Install pinned Rust toolchain
         run: rustup show
-      - name: Measure PR p99
+      - name: Measure PR text probe
         run: |
           for run in 1 2 3; do
             TEXT_P99_MB=10 TEXT_P99_SAMPLES=100 \
               cargo run --release -p anvil-text-bench --bin text-p99 > "/tmp/pr-p99-$run.csv"
           done
-      - name: Measure main p99
+      - name: Measure main text probe
         run: |
           git worktree add --detach /tmp/bench-base origin/main
           cd /tmp/bench-base
@@ -83,14 +83,15 @@ jobs:
                 cargo run --release -p anvil-core --bin text-p99 > "/tmp/base-p99-$run.csv"
             done
           fi
-      - name: Compare p99 against main
+      - name: Compare p50 against main
         run: |
           python3 - <<'PY'
           from pathlib import Path
           import sys
 
           # Shared runners cannot measure p99 reliably; compare the median for
-          # PR gating while the CSV keeps p95/p99 for product benchmarks.
+          # PR gating while the CSV keeps p95/p99 for product benchmarks
+          # (ADR-0081).
           def read(pattern):
               rows = {}
               for path in sorted(Path("/tmp").glob(pattern)):
@@ -125,7 +126,7 @@ jobs:
           if failures:
               print("\n".join(failures))
               sys.exit(1)
-          print("p99 regression gate: ok")
+          print("p50 regression gate: ok")
           PY
 
   rust:
