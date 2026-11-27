@@ -698,8 +698,14 @@ fn buffer_tab_hits_follow_icons_markers_and_wide_names() {
         std::fs::write(&path, "text").expect("write");
         model.open_path(&path).expect("open buffer");
     }
-    model.buffers.entries[1].modified = true;
-    model.buffers.entries[2].missing = true;
+    let second_id = model.buffers.entries[1].document;
+    let third_id = model.buffers.entries[2].document;
+    model
+        .buffers
+        .document_mut(second_id)
+        .expect("second")
+        .modified = true;
+    model.buffers.document_mut(third_id).expect("third").missing = true;
     let hits = crate::render::buffer_tab_hits(&model, 200);
     assert_eq!(hits.len(), paths.len());
     for (index, hit) in hits.iter().enumerate() {

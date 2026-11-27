@@ -495,8 +495,9 @@ pub(crate) fn render_overlays(model: &Model, frame: &mut Frame, area: Rect) {
                     .as_u64()
                     .and_then(|index| usize::try_from(index).ok())
                     .and_then(|index| model.buffers.entries.get(index))
-                    .and_then(|buffer| {
-                        picker_file_icon(model, buffer.path.as_deref()?, buffer.missing)
+                    .and_then(|view| {
+                        let document = model.buffers.document(view.document)?;
+                        picker_file_icon(model, document.path.as_deref()?, document.missing)
                     }),
                 crate::state::BufferPickerMode::ChangedFiles { paths } => paths
                     .get(*index)

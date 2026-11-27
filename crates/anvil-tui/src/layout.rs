@@ -1333,7 +1333,7 @@ mod workbench_layout_tests {
     fn split_rects_follow_focus_and_remain_available() {
         let mut model = model();
         model.buffers.split = Some(Pane {
-            buffer: model.snapshot(),
+            buffer: model.active_view_state(),
         });
         let rects = workbench_rects(&model, 120, 40).expect("layout");
         let split = rects.split.as_ref().expect("split");

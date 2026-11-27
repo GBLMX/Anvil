@@ -381,9 +381,8 @@ fn promoting_reloaded_background_rebuilds_syntax() {
     assert!(
         model
             .buffers
-            .background
-            .get(&path)
-            .expect("background")
+            .document(*model.buffers.background.get(&path).expect("background"))
+            .expect("document")
             .syntax
             .highlights()
             .is_empty()
@@ -571,7 +570,16 @@ fn closing_active_middle_buffer_keeps_the_following_buffer() {
     assert_eq!(model.buffers.entries.len(), 2);
     assert_eq!(model.buffers.active, 1);
     assert_eq!(model.session.editor.text().slice(0..5), "third");
-    assert_eq!(model.buffers.entries[1].editor.text().slice(0..5), "third");
+    assert_eq!(
+        model
+            .buffers
+            .active_document()
+            .expect("document")
+            .session
+            .text()
+            .slice(0..5),
+        "third"
+    );
 }
 
 #[test]
@@ -686,7 +694,13 @@ fn close_indexed_buffer_keeps_active_buffer() {
     command(&mut model, "bd 1");
     assert_eq!(model.session.path.as_ref(), Some(&second));
     assert_eq!(model.buffers.entries.len(), 1);
-    assert_eq!(model.buffers.entries[0].path.as_ref(), Some(&second));
+    assert_eq!(
+        model
+            .buffers
+            .document(model.buffers.entries[0].document)
+            .and_then(|document| document.path.as_ref()),
+        Some(&second)
+    );
 }
 
 #[test]
@@ -717,14 +731,16 @@ fn closing_buffer_refuses_to_drop_dirty_split() {
     model.focus_split(true);
 
     command(&mut model, "bd");
-    assert!(
+    assert!(model.buffers.split.as_ref().is_some_and(|pane| {
         model
             .buffers
-            .split
-            .as_ref()
-            .is_some_and(|pane| pane.buffer.modified)
-    );
-    assert!(model.status.text.contains("split pane has unsaved changes"));
+            .document(pane.buffer.document)
+            .is_some_and(|document| document.modified)
+    }));
+    assert!(matches!(
+        model.ui.input_mode,
+        InputMode::ConfirmClose { .. }
+    ));
     assert_eq!(model.session.path.as_ref(), Some(&path));
 }
 
@@ -737,7 +753,12 @@ fn buffer_bar_shows_dirty_missing_and_read_only_states() {
     fs::write(&second, "second").expect("second");
     let mut model = Model::open(&first).expect("open first");
     model.open_path(&second).expect("open second");
-    model.buffers.entries[0].modified = true;
+    let first_id = model.buffers.entries[0].document;
+    model
+        .buffers
+        .document_mut(first_id)
+        .expect("document")
+        .modified = true;
     model.mark_missing(&second);
 
     let render = |model: &Model, width: u16, height: u16| {
@@ -952,14 +973,13 @@ fn external_change_prompts_when_split_copy_is_dirty() {
     model.split_vertical();
     model.insert_text("X");
     model.focus_split(true);
-    assert!(
+    assert!(model.buffers.split.as_ref().is_some_and(|pane| {
         model
             .buffers
-            .split
-            .as_ref()
-            .is_some_and(|pane| pane.buffer.modified)
-    );
-    assert!(!model.file.modified);
+            .document(pane.buffer.document)
+            .is_some_and(|document| document.modified)
+    }));
+    assert!(model.file.modified);
 
     fs::write(&path, "disk").expect("external write");
     model.handle_external_change(path);
@@ -968,13 +988,12 @@ fn external_change_prompts_when_split_copy_is_dirty() {
         model.ui.input_mode,
         InputMode::ConfirmReload { .. }
     ));
-    assert!(
+    assert!(model.buffers.split.as_ref().is_some_and(|pane| {
         model
             .buffers
-            .split
-            .as_ref()
-            .is_some_and(|pane| pane.buffer.editor.text().slice(0..1) == "X")
-    );
+            .document(pane.buffer.document)
+            .is_some_and(|document| document.session.text().slice(0..1) == "X")
+    }));
 }
 
 #[test]
@@ -1950,4 +1969,39 @@ fn buffer_picker_mouse_selects_visible_row_and_closes_outside() {
 
     handle_event(&mut model, Event::Mouse(click(0, 0)));
     assert!(model.overlays.buffer_picker.is_none());
+}
+
+#[test]
+fn split_views_share_document_edits_and_save_state() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("file.txt");
+    fs::write(&path, "alpha").expect("write");
+    let mut model = Model::open(&path).expect("open");
+    model.split_vertical();
+    model.focus_split(true);
+    model.insert_text("X");
+    assert!(model.file.modified);
+
+    model.focus_split(false);
+    assert_eq!(model.session.editor.text().slice(0..6), "Xalpha");
+    model.session.cursor = 3;
+    model.focus_split(true);
+    assert_eq!(model.session.cursor, 1);
+    model.session.cursor = 5;
+    model.focus_split(false);
+    assert_eq!(model.session.cursor, 3);
+    model.focus_split(true);
+    assert_eq!(model.session.cursor, 5);
+
+    model.focus_split(false);
+    assert!(model.save());
+    assert!(!model.file.modified);
+    assert!(
+        model
+            .buffers
+            .documents
+            .values()
+            .all(|document| !document.modified)
+    );
+    assert_eq!(fs::read_to_string(&path).expect("read"), "Xalpha");
 }

@@ -341,7 +341,7 @@ mod tests {
 
         model.split_vertical();
         assert_eq!(
-            model.buffers.split.as_ref().expect("split").buffer.id,
+            model.buffers.split.as_ref().expect("split").buffer.document,
             model.buffers.active_id
         );
 

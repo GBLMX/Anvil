@@ -12,7 +12,7 @@ pub(crate) const ONBOARDING_TEXT: &str = include_str!("../../../docs/src/onboard
 #[derive(Default)]
 pub(crate) struct ReadOnlyState {
     /// Buffer replaced by the read-only page.
-    pub(crate) back: Option<Buffer>,
+    pub(crate) back: Option<View>,
     /// Short title for the current read-only page.
     pub(crate) title: Option<String>,
 }
@@ -36,26 +36,13 @@ impl Model {
             self.file.dirty = true;
             return false;
         }
-        let editor = std::mem::replace(
-            &mut self.session.editor,
-            EditorState::from_text(text).into(),
-        );
-        let saved = Buffer {
-            id: self.buffers.active_id,
-            editor,
-            path: self.session.path.take(),
-            cursor: self.session.cursor,
-            scroll: self.view.scroll,
-            hscroll: self.view.hscroll,
-            visual_anchor: self.edit.visual_anchor,
-            visual_line: self.edit.visual_line,
-            modified: self.file.modified,
-            missing: self.file.missing,
-            search_query: std::mem::take(&mut self.search.query),
-            syntax: self.syntax_cache.highlights.borrow().active_cache(),
-        };
+        self.sync_active();
+        let view = self.active_view_state();
+        self.session.editor = EditorState::from_text(text).into();
+        self.session.path = None;
+        self.session.cursor = 0;
+        self.pager.back = Some(view);
         self.pager.title = Some(title.to_owned());
-        self.pager.back = Some(saved);
         self.clear_git_gutter();
         self.syntax_cache
             .highlights
@@ -106,14 +93,20 @@ impl Model {
         self.workspace.git.conflicts_pending = None;
         self.workspace.git.stage_pending = None;
         self.workspace.git.resolve_pending = None;
-        let syntax = saved.syntax.clone();
-        self.buffers.active_id = saved.id;
-        self.session.editor = saved.editor;
-        self.session.path = saved.path;
+        let Some(document) = self.buffers.document(saved.document).cloned() else {
+            return false;
+        };
+        let syntax = document.syntax.clone();
+        self.buffers.active_id = document.id;
+        self.session.editor = document.session;
+        self.session.path = document.path;
         self.session.cursor = saved.cursor;
         self.view.scroll = saved.scroll;
         self.view.hscroll = saved.hscroll;
-        self.file.modified = saved.modified;
+        self.file.modified = document.modified;
+        self.file.missing = document.missing;
+        self.edit.visual_anchor = saved.visual_anchor;
+        self.edit.visual_line = saved.visual_line;
         self.search.query = saved.search_query;
         self.syntax_cache.highlights.borrow_mut().switch_path_with(
             self.session.path.as_deref(),

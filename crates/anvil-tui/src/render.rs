@@ -344,36 +344,34 @@ fn buffer_tabs(model: &Model) -> (Vec<BufferTab>, usize) {
         .buffers
         .entries
         .iter()
-        .map(|buffer| {
-            let name = buffer
-                .path
-                .as_ref()
+        .map(|view| {
+            let document = model.buffers.document(view.document);
+            let path = document.and_then(|document| document.path.as_ref());
+            let missing = document.is_some_and(|document| document.missing);
+            let modified = document.is_some_and(|document| document.modified);
+            let name = path
                 .and_then(|path| path.file_name())
                 .map(|name| name.to_string_lossy().into_owned())
                 .unwrap_or_else(|| "[no file]".to_owned());
-            let marker = if buffer.missing {
+            let marker = if missing {
                 " !"
-            } else if buffer.modified {
+            } else if modified {
                 " ●"
             } else {
                 ""
             };
             let label = format!("{name}{marker} ");
-            let icon = buffer
-                .path
-                .as_deref()
-                .and_then(|path| path.file_name())
-                .and_then(|name| {
-                    let icon = icon_theme::icon_for(&name.to_string_lossy())
-                        .unwrap_or_else(icon_theme::default_file_icon);
-                    let text = icons.icon_text(icon, ascii_icons)?.trim_end().to_owned();
-                    let color = if buffer.missing {
-                        theme::dim()
-                    } else {
-                        (icon.color)()
-                    };
-                    Some((text, color))
-                });
+            let icon = path.and_then(|path| path.file_name()).and_then(|name| {
+                let icon = icon_theme::icon_for(&name.to_string_lossy())
+                    .unwrap_or_else(icon_theme::default_file_icon);
+                let text = icons.icon_text(icon, ascii_icons)?.trim_end().to_owned();
+                let color = if missing {
+                    theme::dim()
+                } else {
+                    (icon.color)()
+                };
+                Some((text, color))
+            });
             let icon_width = icon
                 .as_ref()
                 .map(|(text, _)| UnicodeWidthStr::width(text.as_str()))

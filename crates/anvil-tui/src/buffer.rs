@@ -9,27 +9,54 @@ use anvil_session::provider::{
 use serde_json::json;
 use std::sync::Arc;
 impl Model {
-    pub(crate) fn snapshot(&self) -> Buffer {
-        Buffer {
+    pub(crate) fn sync_active(&mut self) {
+        let document = self.buffers.document_mut(self.buffers.active_id);
+        if let Some(document) = document {
+            document.session = self.session.editor.clone();
+            document.path = self.session.path.clone();
+            document.modified = self.file.modified;
+            document.missing = self.file.missing;
+            document.syntax = self.syntax_cache.highlights.borrow().active_cache();
+        }
+        let view = if self.ui.focus.split {
+            self.buffers.split.as_mut().map(|pane| &mut pane.buffer)
+        } else {
+            self.buffers.entries.get_mut(self.buffers.active)
+        };
+        if let Some(view) = view {
+            view.cursor = self.session.cursor;
+            view.scroll = self.view.scroll;
+            view.hscroll = self.view.hscroll;
+            view.visual_anchor = self.edit.visual_anchor;
+            view.visual_line = self.edit.visual_line;
+            view.search_query = self.search.query.clone();
+        }
+    }
+
+    pub(crate) fn active_document_state(&self) -> Document {
+        Document {
             id: self.buffers.active_id,
-            editor: self.session.editor.clone(),
+            session: self.session.editor.clone(),
             path: self.session.path.clone(),
-            cursor: self.session.cursor,
-            scroll: self.view.scroll,
-            missing: self.file.missing,
-            hscroll: self.view.hscroll,
-            visual_anchor: self.edit.visual_anchor,
-            visual_line: self.edit.visual_line,
             modified: self.file.modified,
-            search_query: self.search.query.clone(),
+            missing: self.file.missing,
             syntax: self.syntax_cache.highlights.borrow().active_cache(),
         }
     }
 
-    pub(crate) fn sync_active(&mut self) {
-        let snapshot = self.snapshot();
-        if let Some(buffer) = self.buffers.entries.get_mut(self.buffers.active) {
-            *buffer = snapshot;
+    pub(crate) fn active_view_state(&self) -> View {
+        View {
+            id: self
+                .buffers
+                .active_view()
+                .map_or_else(ViewId::next, |view| view.id),
+            document: self.buffers.active_id,
+            cursor: self.session.cursor,
+            scroll: self.view.scroll,
+            hscroll: self.view.hscroll,
+            visual_anchor: self.edit.visual_anchor,
+            visual_line: self.edit.visual_line,
+            search_query: self.search.query.clone(),
         }
     }
 
@@ -326,11 +353,14 @@ impl Model {
                 .entries
                 .iter()
                 .enumerate()
-                .map(|(index, buffer)| PickerBuffer {
+                .map(|(index, view)| PickerBuffer {
                     index,
                     name: self.buffer_name(index),
                     active: index == self.buffers.active,
-                    modified: buffer.modified,
+                    modified: self
+                        .buffers
+                        .document(view.document)
+                        .is_some_and(|document| document.modified),
                 })
                 .collect(),
         }
@@ -367,20 +397,23 @@ impl Model {
         self.close_overlay(OverlayKind::CodeActions);
         self.overlays.lsp_results.document_symbols = None;
         self.close_overlay(OverlayKind::DocumentSymbols);
-        let Some(buffer) = self.buffers.entries.get(index).cloned() else {
+        let Some(view) = self.buffers.entries.get(index).cloned() else {
             return;
         };
-        let syntax = buffer.syntax.clone();
-        self.file.missing = buffer.missing;
-        self.edit.visual_anchor = buffer.visual_anchor;
-        self.edit.visual_line = buffer.visual_line;
-        self.session.editor = buffer.editor;
-        self.session.path = buffer.path;
-        self.session.cursor = buffer.cursor;
-        self.view.scroll = buffer.scroll;
-        self.view.hscroll = buffer.hscroll;
-        self.file.modified = buffer.modified;
-        self.search.query = buffer.search_query;
+        let Some(document) = self.buffers.document(view.document).cloned() else {
+            return;
+        };
+        let syntax = document.syntax.clone();
+        self.file.missing = document.missing;
+        self.edit.visual_anchor = view.visual_anchor;
+        self.edit.visual_line = view.visual_line;
+        self.session.editor = document.session;
+        self.session.path = document.path;
+        self.session.cursor = view.cursor;
+        self.view.scroll = view.scroll;
+        self.view.hscroll = view.hscroll;
+        self.file.modified = document.modified;
+        self.search.query = view.search_query;
         self.search.state.reset_for_buffer();
         self.start_page.welcome = false;
         self.start_page.welcome_back = false;
@@ -389,7 +422,15 @@ impl Model {
             false,
             Some(syntax),
         );
-        self.buffers.active_id = buffer.id;
+        self.buffers.active_id = view.document;
+        if self.ui.focus.split
+            && let Some(pane) = self.buffers.split.as_mut()
+        {
+            pane.buffer.document = view.document;
+            pane.buffer.cursor = self.session.cursor;
+            pane.buffer.scroll = self.view.scroll;
+            pane.buffer.hscroll = self.view.hscroll;
+        }
         self.buffers.active = index;
         self.ui.input_mode = InputMode::Normal;
         self.input.pending = None;
@@ -401,7 +442,9 @@ impl Model {
     pub(crate) fn ensure_current_buffer(&mut self) -> usize {
         self.sync_active();
         if self.buffers.entries.is_empty() {
-            self.buffers.entries.push(self.snapshot());
+            let document = self.active_document_state();
+            self.buffers.documents.insert(document.id, document);
+            self.buffers.entries.push(self.active_view_state());
             self.buffers.active = 0;
         }
         self.buffers.active
@@ -429,19 +472,27 @@ impl Model {
             return;
         }
         self.ensure_current_buffer();
-        self.buffers.entries.push(Buffer {
-            id: BufferId::next(),
-            editor: EditorState::from_text("").into(),
-            path: None,
+        let document = DocumentId::next();
+        self.buffers.documents.insert(
+            document,
+            Document {
+                id: document,
+                session: EditorState::from_text("").into(),
+                path: None,
+                modified: false,
+                missing: false,
+                syntax: Default::default(),
+            },
+        );
+        self.buffers.entries.push(View {
+            id: ViewId::next(),
+            document,
             cursor: 0,
-            missing: false,
             scroll: 0,
+            hscroll: 0,
             visual_anchor: None,
             visual_line: false,
-            hscroll: 0,
-            modified: false,
             search_query: String::new(),
-            syntax: Default::default(),
         });
         let index = self.buffers.entries.len() - 1;
         self.load_buffer(index);
@@ -449,15 +500,13 @@ impl Model {
         self.sync_watch_paths();
         self.file.dirty = true;
     }
-
     pub(crate) fn buffer_name(&self, index: usize) -> String {
         if index == self.buffers.active && self.file.stdin_buffer {
             return "[stdin]".to_owned();
         }
         self.buffers
-            .entries
-            .get(index)
-            .and_then(|buffer| buffer.path.as_ref())
+            .view_document(index)
+            .and_then(|document| document.path.as_ref())
             .map(|path| path.display().to_string())
             .unwrap_or_else(|| "[no file]".to_owned())
     }
@@ -472,21 +521,28 @@ impl Model {
         if index == self.buffers.active {
             return self.save();
         }
-        let Some(path) = self.buffers.entries[index].path.clone() else {
+        let Some(path) = self
+            .buffers
+            .view_document(index)
+            .and_then(|document| document.path.clone())
+        else {
             self.status.text = "E: buffer has no file name".to_owned();
             self.file.dirty = true;
             return false;
         };
-        let text = self.buffers.entries[index]
-            .editor
-            .text()
-            .slice(0..self.buffers.entries[index].editor.text().len_bytes());
+        let text = self
+            .buffers
+            .view_document(index)
+            .expect("buffer document")
+            .session
+            .text();
+        let text = text.slice(0..text.len_bytes());
         let display = path.display().to_string();
         match self.write_file(&path, &text) {
             Ok(()) => {
-                if let Some(buffer) = self.buffers.entries.get_mut(index) {
-                    buffer.modified = false;
-                    buffer.missing = false;
+                if let Some(document) = self.buffers.view_document_mut(index) {
+                    document.modified = false;
+                    document.missing = false;
                 }
                 self.status.text = format!("\"{display}\" written");
                 self.file.dirty = true;
@@ -507,14 +563,23 @@ impl Model {
             self.file.dirty = true;
             return;
         }
-        if self.buffers.entries[index].modified && !force {
+        if self
+            .buffers
+            .view_document(index)
+            .is_some_and(|document| document.modified)
+            && !force
+        {
             if index == self.buffers.active && self.config.settings.editor.auto_save {
                 if !self.auto_save_before_focus_change() {
                     return;
                 }
                 self.sync_active();
             }
-            if self.buffers.entries[index].modified {
+            if self
+                .buffers
+                .view_document(index)
+                .is_some_and(|document| document.modified)
+            {
                 self.ui.input_mode = InputMode::ConfirmClose { index };
                 self.status.text =
                     format!("Save {} before closing? [Y/n/c]", self.buffer_name(index));
@@ -525,32 +590,22 @@ impl Model {
         self.finish_close_buffer(index);
         self.sync_watch_paths();
     }
+
     fn finish_close_buffer(&mut self, index: usize) {
         let was_active = index == self.buffers.active;
-        let target_path = self.buffers.entries[index].path.clone();
-        let split_same = self.buffers.split.as_ref().is_some_and(|pane| {
-            match (&target_path, &pane.buffer.path) {
-                (Some(target), Some(split)) => target == split,
-                (None, None) => was_active,
-                _ => false,
-            }
-        });
-        if split_same
-            && self
-                .buffers
-                .split
-                .as_ref()
-                .is_some_and(|pane| pane.buffer.modified)
-        {
-            self.status.text = "E: split pane has unsaved changes".to_owned();
-            self.file.dirty = true;
-            return;
-        }
+        let document_id = self.buffers.entries[index].document;
+        let split_same = self
+            .buffers
+            .split
+            .as_ref()
+            .is_some_and(|pane| pane.buffer.document == document_id);
         if split_same {
             self.buffers.split = None;
+            self.buffers.split_left = None;
             self.ui.focus.split = false;
         }
         self.buffers.entries.remove(index);
+        self.prune_document(document_id);
         if self.buffers.entries.is_empty() {
             self.reset_empty_buffer();
             self.status.text = "buffer closed".to_owned();
@@ -569,6 +624,23 @@ impl Model {
             self.buffers.entries.len() + 1
         );
         self.file.dirty = true;
+    }
+
+    pub(crate) fn prune_document(&mut self, id: DocumentId) {
+        let referenced = self.buffers.entries.iter().any(|view| view.document == id)
+            || self
+                .buffers
+                .split
+                .as_ref()
+                .is_some_and(|pane| pane.buffer.document == id)
+            || self
+                .buffers
+                .background
+                .values()
+                .any(|document| *document == id);
+        if !referenced {
+            self.buffers.documents.remove(&id);
+        }
     }
 
     fn reset_empty_buffer(&mut self) {
@@ -594,7 +666,19 @@ impl Model {
         self.buffers.split = None;
         self.ui.focus.split = false;
         self.buffers.active = 0;
-        self.buffers.active_id = BufferId::next();
+        let id = DocumentId::next();
+        self.buffers.documents.insert(
+            id,
+            Document {
+                id,
+                session: EditorState::from_text("").into(),
+                path: None,
+                modified: false,
+                missing: false,
+                syntax: Default::default(),
+            },
+        );
+        self.buffers.active_id = id;
         self.sync_lsp_active();
         self.file.dirty = true;
     }
@@ -627,11 +711,11 @@ impl Model {
             self.file.dirty = true;
             return;
         }
-        let existing = self
-            .buffers
-            .entries
-            .iter()
-            .position(|buffer| buffer.path.as_ref() == Some(&path));
+        let existing = self.buffers.entries.iter().position(|view| {
+            self.buffers
+                .document(view.document)
+                .is_some_and(|document| document.path.as_ref() == Some(&path))
+        });
         if existing.is_none() && self.ensure_buffer_capacity().is_err() {
             return;
         }
@@ -650,12 +734,23 @@ impl Model {
             self.file.dirty = true;
             return;
         }
-        if let Some(mut buffer) = self.buffers.background.remove(&path) {
+        if let Some(document) = self.buffers.background.remove(&path) {
             if self.session.path.is_some() {
                 self.ensure_current_buffer();
             }
-            buffer.syntax = Default::default();
-            self.buffers.entries.push(buffer);
+            if let Some(document) = self.buffers.document_mut(document) {
+                document.syntax = Default::default();
+            }
+            self.buffers.entries.push(View {
+                id: ViewId::next(),
+                document,
+                cursor: 0,
+                scroll: 0,
+                hscroll: 0,
+                visual_anchor: None,
+                visual_line: false,
+                search_query: String::new(),
+            });
             let index = self.buffers.entries.len() - 1;
             self.load_buffer(index);
             self.status.text = format!(
@@ -677,21 +772,31 @@ impl Model {
         };
         self.sync_active();
         if self.buffers.entries.is_empty() {
-            self.buffers.entries.push(self.snapshot());
+            let document = self.active_document_state();
+            self.buffers.documents.insert(document.id, document);
+            self.buffers.entries.push(self.active_view_state());
         }
-        self.buffers.entries.push(Buffer {
-            id: BufferId::next(),
-            editor: EditorState::from_text(&text).into(),
-            path: Some(path.clone()),
+        let document = DocumentId::next();
+        self.buffers.documents.insert(
+            document,
+            Document {
+                id: document,
+                session: EditorState::from_text(&text).into(),
+                path: Some(path.clone()),
+                modified: false,
+                missing: false,
+                syntax: Default::default(),
+            },
+        );
+        self.buffers.entries.push(View {
+            id: ViewId::next(),
+            document,
             cursor: 0,
-            missing: false,
-            visual_anchor: None,
-            visual_line: false,
             scroll: 0,
             hscroll: 0,
-            modified: false,
+            visual_anchor: None,
+            visual_line: false,
             search_query: String::new(),
-            syntax: Default::default(),
         });
         let index = self.buffers.entries.len() - 1;
         self.load_buffer(index);
@@ -738,37 +843,18 @@ impl Model {
         (self.session.path.as_deref() == Some(path) && self.file.modified)
             || self
                 .buffers
-                .entries
-                .iter()
-                .any(|buffer| buffer.path.as_deref() == Some(path) && buffer.modified)
-            || self
-                .buffers
-                .background
-                .get(path)
-                .is_some_and(|buffer| buffer.modified)
-            || self.buffers.split.as_ref().is_some_and(|pane| {
-                pane.buffer.path.as_deref() == Some(path) && pane.buffer.modified
-            })
+                .documents
+                .values()
+                .any(|document| document.path.as_deref() == Some(path) && document.modified)
     }
 
     pub(crate) fn any_modified(&self) -> bool {
         self.file.modified
             || self
                 .buffers
-                .split
-                .as_ref()
-                .is_some_and(|pane| pane.buffer.modified)
-            || self
-                .buffers
-                .entries
-                .iter()
-                .enumerate()
-                .any(|(index, buffer)| index != self.buffers.active && buffer.modified)
-            || self
-                .buffers
-                .background
+                .documents
                 .values()
-                .any(|buffer| buffer.modified)
+                .any(|document| document.modified)
     }
 
     pub(crate) fn request_quit(&mut self) {

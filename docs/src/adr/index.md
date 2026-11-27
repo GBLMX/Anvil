@@ -84,7 +84,7 @@ their decision sections.
 | [0076](0076-built-in-lsp-profile-scope.md) | Built-in LSP profile scope | Proposed |
 | [0077](0077-benchmark-only-text-backends.md) | Benchmark-only text backends | Accepted; implemented 2026-11-24 |
 | [0078](0078-gateway-authorization-scopes-and-audit.md) | Gateway authorization scopes, trust sources, and audit | Proposed |
-| [0079](0079-document-view-ownership-for-tui-buffers.md) | Document and view ownership for TUI buffers | Accepted; document metadata wrapper implemented 2026-11-26; shared document store pending |
+| [0079](0079-document-view-ownership-for-tui-buffers.md) | Document and view ownership for TUI buffers | Accepted; shared document/view store implemented 2026-11-27 |
 | [0080](0080-release-cadence-and-synchronization.md) | Release cadence, freeze policy, and synchronization rails | Accepted; PR benchmark gate amended by ADR-0081 |
 | [0081](0081-stable-pr-benchmark-gate.md) | Stable PR text benchmark gate | Accepted; implemented 2026-11-27 |
 
