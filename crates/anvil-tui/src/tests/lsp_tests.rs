@@ -533,7 +533,7 @@ fn local_and_lsp_completions_merge_without_duplicates() {
         .language
         .lsp_requests
         .pending
-        .insert(20, LspRequestKind::Completion);
+        .insert(20, PendingRequest::new(LspRequestKind::Completion));
     model.handle_lsp_response(
         20,
         serde_json::json!({
@@ -566,7 +566,7 @@ fn completion_response_uses_and_closes_the_overlay_stack() {
         .language
         .lsp_requests
         .pending
-        .insert(19, LspRequestKind::Completion);
+        .insert(19, PendingRequest::new(LspRequestKind::Completion));
     model.handle_lsp_response(
         19,
         serde_json::json!({
@@ -610,7 +610,7 @@ fn cancelling_completion_drops_pending_response() {
         .language
         .lsp_requests
         .pending
-        .insert(9, LspRequestKind::Completion);
+        .insert(9, PendingRequest::new(LspRequestKind::Completion));
     model.cancel_completion();
     assert!(model.language.completion.completion.is_none());
     assert!(!model.language.lsp_requests.pending.contains_key(&9));
@@ -620,7 +620,7 @@ fn cancelling_completion_drops_pending_response() {
         .language
         .lsp_requests
         .pending
-        .insert(10, LspRequestKind::Completion);
+        .insert(10, PendingRequest::new(LspRequestKind::Completion));
     model.cancel_completion();
     assert!(!model.language.lsp_requests.pending.contains_key(&10));
     model.handle_lsp_response(10, serde_json::json!({"items": []}), None);
@@ -654,7 +654,7 @@ fn completion_resolve_updates_selected_item() {
         .language
         .lsp_requests
         .pending
-        .insert(7, LspRequestKind::CompletionResolve);
+        .insert(7, PendingRequest::new(LspRequestKind::CompletionResolve));
     model.language.completion.resolve = Some((7, 0));
     model.handle_lsp_response(
         7,
@@ -708,7 +708,7 @@ fn completion_resolve_preserves_command() {
         .language
         .lsp_requests
         .pending
-        .insert(8, LspRequestKind::CompletionResolve);
+        .insert(8, PendingRequest::new(LspRequestKind::CompletionResolve));
     model.language.completion.resolve = Some((8, 0));
     model.handle_lsp_response(8, serde_json::json!({"label": "item"}), None);
     let item = &model
@@ -858,7 +858,7 @@ fn rename_response_applies_workspace_edit() {
         .language
         .lsp_requests
         .pending
-        .insert(7, LspRequestKind::Rename);
+        .insert(7, PendingRequest::new(LspRequestKind::Rename));
     model.handle_lsp_response(
         7,
         serde_json::json!({
@@ -886,7 +886,7 @@ fn code_action_response_applies_workspace_edit() {
         .language
         .lsp_requests
         .pending
-        .insert(8, LspRequestKind::CodeAction);
+        .insert(8, PendingRequest::new(LspRequestKind::CodeAction));
     model.handle_lsp_response(
         8,
         serde_json::json!([{
@@ -915,7 +915,7 @@ fn cancelling_code_action_drops_pending_response() {
         .language
         .lsp_requests
         .pending
-        .insert(10, LspRequestKind::CodeAction);
+        .insert(10, PendingRequest::new(LspRequestKind::CodeAction));
     model.cancel_code_actions();
     assert!(!model.language.lsp_requests.pending.contains_key(&10));
     model.handle_lsp_response(10, serde_json::json!([{"title": "late"}]), None);
@@ -933,7 +933,7 @@ fn gopls_code_action_response_applies_organize_imports() {
         .language
         .lsp_requests
         .pending
-        .insert(9, LspRequestKind::CodeAction);
+        .insert(9, PendingRequest::new(LspRequestKind::CodeAction));
     model.handle_lsp_response(
         9,
         serde_json::json!([
@@ -993,7 +993,7 @@ fn command_only_code_action_dispatches_execute_command() {
         .language
         .lsp_requests
         .pending
-        .insert(11, LspRequestKind::CodeAction);
+        .insert(11, PendingRequest::new(LspRequestKind::CodeAction));
     model.handle_lsp_response(
         11,
         serde_json::json!([{
@@ -1039,7 +1039,7 @@ fn document_symbols_populate_and_jump_to_selection() {
         .language
         .lsp_requests
         .pending
-        .insert(11, LspRequestKind::DocumentSymbol);
+        .insert(11, PendingRequest::new(LspRequestKind::DocumentSymbol));
     model.handle_lsp_response(
         11,
         serde_json::json!([
@@ -1125,7 +1125,7 @@ fn document_symbol_depth_is_bounded() {
         .language
         .lsp_requests
         .pending
-        .insert(14, LspRequestKind::DocumentSymbol);
+        .insert(14, PendingRequest::new(LspRequestKind::DocumentSymbol));
     model.handle_lsp_response(14, serde_json::json!([value]), None);
     let symbols = model
         .overlays
@@ -1146,7 +1146,7 @@ fn formatting_response_applies_edits_without_writing() {
         .language
         .lsp_requests
         .pending
-        .insert(12, LspRequestKind::Formatting);
+        .insert(12, PendingRequest::new(LspRequestKind::Formatting));
     model.handle_lsp_response(
         12,
         serde_json::json!([{
@@ -1180,16 +1180,15 @@ fn formatting_response_for_inactive_path_is_ignored() {
         .save_as(second.to_str().expect("second path"))
         .then_some(())
         .expect("save as");
-    model
-        .language
-        .lsp_requests
-        .pending_edit_path
-        .insert(13, first_path);
-    model
-        .language
-        .lsp_requests
-        .pending
-        .insert(13, LspRequestKind::Formatting);
+    model.language.lsp_requests.pending.insert(
+        13,
+        PendingRequest {
+            kind: LspRequestKind::Formatting,
+            edit_revision: None,
+            edit_path: Some(first_path),
+            edit_snapshot: None,
+        },
+    );
     model.handle_lsp_response(
         13,
         serde_json::json!([{
@@ -1220,7 +1219,7 @@ fn workspace_symbols_response_filters_and_jumps() {
         .language
         .lsp_requests
         .pending
-        .insert(18, LspRequestKind::WorkspaceSymbol);
+        .insert(18, PendingRequest::new(LspRequestKind::WorkspaceSymbol));
     model.handle_lsp_response(
         18,
         serde_json::json!([
@@ -1285,7 +1284,7 @@ fn signature_help_response_populates_active_signature() {
         .language
         .lsp_requests
         .pending
-        .insert(17, LspRequestKind::SignatureHelp);
+        .insert(17, PendingRequest::new(LspRequestKind::SignatureHelp));
     model.handle_lsp_response(
         17,
         serde_json::json!({
@@ -1314,16 +1313,15 @@ fn stale_formatting_response_is_ignored() {
     let file = dir.path().join("stale.rs");
     fs::write(&file, "fn main(){}").expect("file");
     let mut model = Model::open(&file).expect("open");
-    model
-        .language
-        .lsp_requests
-        .pending
-        .insert(15, LspRequestKind::Formatting);
-    model
-        .language
-        .lsp_requests
-        .pending_edit_revision
-        .insert(15, model.session.editor.revision());
+    model.language.lsp_requests.pending.insert(
+        15,
+        PendingRequest {
+            kind: LspRequestKind::Formatting,
+            edit_revision: Some(model.session.editor.revision()),
+            edit_path: None,
+            edit_snapshot: None,
+        },
+    );
     let _ = model.session.editor.try_insert(0, "x");
     model.handle_lsp_response(
         15,
@@ -1350,21 +1348,15 @@ fn rename_response_for_inactive_path_is_ignored() {
     let first_path = model.session.path.clone().expect("first path");
     let uri = anvil_lsp_client::file_uri(&first_path);
     assert!(model.save_as(second.to_str().expect("second path")));
-    model
-        .language
-        .lsp_requests
-        .pending_edit_path
-        .insert(16, first_path);
-    model
-        .language
-        .lsp_requests
-        .pending_edit_revision
-        .insert(16, model.session.editor.revision());
-    model
-        .language
-        .lsp_requests
-        .pending
-        .insert(16, LspRequestKind::Rename);
+    model.language.lsp_requests.pending.insert(
+        16,
+        PendingRequest {
+            kind: LspRequestKind::Rename,
+            edit_revision: Some(model.session.editor.revision()),
+            edit_path: Some(first_path),
+            edit_snapshot: None,
+        },
+    );
     model.handle_lsp_response(
         16,
         serde_json::json!({
@@ -1521,7 +1513,7 @@ fn hover_response_dismisses_cleanly_from_the_stack() {
         .language
         .lsp_requests
         .pending
-        .insert(17, LspRequestKind::Hover);
+        .insert(17, PendingRequest::new(LspRequestKind::Hover));
     model.handle_lsp_response(
         17,
         serde_json::json!({"contents": {"kind": "plaintext", "value": "docs"}}),
@@ -1718,16 +1710,15 @@ fn rename_response_rejects_a_stale_inactive_buffer_snapshot() {
         .expect("second buffer");
     base.insert(second_path.clone(), second_buffer.session.revision());
     let _ = second_buffer.session.try_insert(0, "stale");
-    model
-        .language
-        .lsp_requests
-        .pending_edit_snapshot
-        .insert(17, base);
-    model
-        .language
-        .lsp_requests
-        .pending
-        .insert(17, LspRequestKind::Rename);
+    model.language.lsp_requests.pending.insert(
+        17,
+        PendingRequest {
+            kind: LspRequestKind::Rename,
+            edit_revision: None,
+            edit_path: None,
+            edit_snapshot: Some(base),
+        },
+    );
     let first_uri = anvil_lsp_client::file_uri(&first);
     model.handle_lsp_response(
         17,
@@ -1760,7 +1751,7 @@ fn rename_response_rejects_a_stale_document_version() {
         .language
         .lsp_requests
         .pending
-        .insert(18, LspRequestKind::Rename);
+        .insert(18, PendingRequest::new(LspRequestKind::Rename));
     model.handle_lsp_response(
         18,
         serde_json::json!({
@@ -1789,7 +1780,7 @@ fn completion_applies_item_defaults_edit_range() {
         .language
         .lsp_requests
         .pending
-        .insert(30, LspRequestKind::Completion);
+        .insert(30, PendingRequest::new(LspRequestKind::Completion));
     model.handle_lsp_response(
         30,
         serde_json::json!({
@@ -1826,7 +1817,7 @@ fn completion_applies_insert_replace_text_edit() {
         .language
         .lsp_requests
         .pending
-        .insert(31, LspRequestKind::Completion);
+        .insert(31, PendingRequest::new(LspRequestKind::Completion));
     model.handle_lsp_response(
         31,
         serde_json::json!({
@@ -1899,7 +1890,7 @@ fn empty_lsp_completion_keeps_local_items() {
         .language
         .lsp_requests
         .pending
-        .insert(32, LspRequestKind::Completion);
+        .insert(32, PendingRequest::new(LspRequestKind::Completion));
     model.handle_lsp_response(
         32,
         serde_json::json!({"isIncomplete": false, "items": []}),
@@ -1926,7 +1917,7 @@ fn incomplete_response_replaces_previous_lsp_items() {
         .language
         .lsp_requests
         .pending
-        .insert(33, LspRequestKind::Completion);
+        .insert(33, PendingRequest::new(LspRequestKind::Completion));
     model.handle_lsp_response(
         33,
         serde_json::json!({
@@ -1940,7 +1931,7 @@ fn incomplete_response_replaces_previous_lsp_items() {
         .language
         .lsp_requests
         .pending
-        .insert(34, LspRequestKind::Completion);
+        .insert(34, PendingRequest::new(LspRequestKind::Completion));
     model.handle_lsp_response(
         34,
         serde_json::json!({
@@ -1974,7 +1965,7 @@ fn completion_expands_callable_snippet_inside_parens() {
         .language
         .lsp_requests
         .pending
-        .insert(35, LspRequestKind::Completion);
+        .insert(35, PendingRequest::new(LspRequestKind::Completion));
     model.handle_lsp_response(
         35,
         serde_json::json!({
@@ -2015,7 +2006,7 @@ fn completion_commit_character_accepts_and_inserts_the_character() {
         .language
         .lsp_requests
         .pending
-        .insert(36, LspRequestKind::Completion);
+        .insert(36, PendingRequest::new(LspRequestKind::Completion));
     model.handle_lsp_response(
         36,
         serde_json::json!({
@@ -2057,7 +2048,7 @@ fn completion_uses_server_all_commit_characters() {
         .language
         .lsp_requests
         .pending
-        .insert(38, LspRequestKind::Completion);
+        .insert(38, PendingRequest::new(LspRequestKind::Completion));
     model.handle_lsp_response(
         38,
         serde_json::json!({
@@ -2195,7 +2186,7 @@ fn signature_help_parses_parameter_ranges() {
         .language
         .lsp_requests
         .pending
-        .insert(40, LspRequestKind::SignatureHelp);
+        .insert(40, PendingRequest::new(LspRequestKind::SignatureHelp));
     model.handle_lsp_response(
         40,
         serde_json::json!({
@@ -2268,7 +2259,7 @@ fn completion_uses_sort_text_preselect_and_filter_text() {
         .language
         .lsp_requests
         .pending
-        .insert(21, LspRequestKind::Completion);
+        .insert(21, PendingRequest::new(LspRequestKind::Completion));
     model.handle_lsp_response(
         21,
         serde_json::json!({"items": [
@@ -2319,7 +2310,7 @@ fn completion_empty_query_preserves_sort_text_order() {
         .language
         .lsp_requests
         .pending
-        .insert(37, LspRequestKind::Completion);
+        .insert(37, PendingRequest::new(LspRequestKind::Completion));
     model.handle_lsp_response(
         37,
         serde_json::json!({"items": [
@@ -2405,7 +2396,7 @@ fn inline_completion_response_replaces_its_range() {
         .language
         .lsp_requests
         .pending
-        .insert(41, LspRequestKind::InlineCompletion);
+        .insert(41, PendingRequest::new(LspRequestKind::InlineCompletion));
     model
         .language
         .completion
@@ -2440,7 +2431,7 @@ fn stale_inline_completion_response_is_ignored() {
         .language
         .lsp_requests
         .pending
-        .insert(42, LspRequestKind::InlineCompletion);
+        .insert(42, PendingRequest::new(LspRequestKind::InlineCompletion));
     model
         .language
         .completion
@@ -2459,7 +2450,7 @@ fn stale_inline_completion_response_is_ignored() {
         .language
         .lsp_requests
         .pending
-        .insert(43, LspRequestKind::InlineCompletion);
+        .insert(43, PendingRequest::new(LspRequestKind::InlineCompletion));
     model
         .language
         .completion
@@ -2483,7 +2474,7 @@ fn inline_response_only_consumes_its_own_request_metadata() {
         .language
         .lsp_requests
         .pending
-        .insert(50, LspRequestKind::InlineCompletion);
+        .insert(50, PendingRequest::new(LspRequestKind::InlineCompletion));
     model
         .language
         .completion
@@ -2505,7 +2496,7 @@ fn completion_fuzzy_ranks_boundaries_and_restores_items() {
         .language
         .lsp_requests
         .pending
-        .insert(22, LspRequestKind::Completion);
+        .insert(22, PendingRequest::new(LspRequestKind::Completion));
     model.handle_lsp_response(
         22,
         serde_json::json!({"items": [
