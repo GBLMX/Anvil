@@ -30,10 +30,13 @@ its own stable `cli` origin.
 `:settings` shows the source of the selected field:
 
 - `default`
-- `environment`
 - `startup override` for `ANVIL_THEME`
 - the user settings path
 - the trusted project settings path
+
+Per-field environment overrides still affect the resolved value but are not
+reported as a settings source; `settings check`, `doctor`, and
+`:config-reload` report them as deprecated instead.
 
 If a project `.anvil.toml` exists but cannot be used, the same line also shows
 the ignored path and reason, for example:
