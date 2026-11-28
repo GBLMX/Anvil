@@ -600,7 +600,8 @@ mod tests {
         assert!(STANDARD.usage.contains("Space f"));
         assert!(STANDARD.usage.contains("previews"));
         assert!(STANDARD.usage.contains("ANVIL_GATEWAY"));
-        assert!(USAGE.contains("ANVIL_EDITOR_MAX_BUFFERS"));
+        assert!(USAGE.contains("Deprecated: per-setting"));
+        assert!(USAGE.contains("ANVIL_SETTINGS"));
         assert!(USAGE.contains("Space b"));
     }
 

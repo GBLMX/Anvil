@@ -80,7 +80,7 @@ their decision sections.
 | [0072](0072-opt-in-osc52-clipboard-fallback.md) | Opt-in OSC 52 clipboard write fallback | Accepted; implemented 2026-11-23 |
 | [0073](0073-tui-motion-and-transition-boundary.md) | TUI motion and transition boundary | Accepted; overlay and alert enter fades implemented; TachyonFX deferred |
 | [0074](0074-anvil-tui-state-decomposition-and-crate-boundary.md) | Anvil-TUI state decomposition, dependency direction, and conditional crate extraction | Proposed; dependency-direction gate implemented; state/page extraction pending |
-| [0075](0075-settings-environment-compatibility-surface.md) | Settings environment compatibility surface | Proposed |
+| [0075](0075-settings-environment-compatibility-surface.md) | Settings environment compatibility surface | Accepted; warning path and migration tests landed 2026-11-28; removal pending |
 | [0076](0076-built-in-lsp-profile-scope.md) | Built-in LSP profile scope | Proposed |
 | [0077](0077-benchmark-only-text-backends.md) | Benchmark-only text backends | Accepted; implemented 2026-11-24 |
 | [0078](0078-gateway-authorization-scopes-and-audit.md) | Gateway authorization scopes, trust sources, and audit | Proposed |

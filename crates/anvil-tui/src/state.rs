@@ -1,6 +1,7 @@
 //! TUI state groups and view/editor snapshots.
 
 use super::*;
+use anvil_editor::EditDelta;
 use anvil_lsp_client as lsp;
 use anvil_session::plugin_provider::{PluginProviderRegistry, PluginProviderRequests};
 use anvil_session::provider::{CancellationToken, PickerEntry, ProviderId};
@@ -1229,6 +1230,22 @@ impl BufferState {
             && pane.buffer.document == document
         {
             pane.buffer.remap_offsets(old, new);
+        }
+    }
+
+    pub(crate) fn remap_views_from_edits(&mut self, document: DocumentId, edits: &[EditDelta]) {
+        if edits.is_empty() {
+            return;
+        }
+        for view in &mut self.entries {
+            if view.document == document {
+                view.remap_edits(edits);
+            }
+        }
+        if let Some(pane) = self.split.as_mut()
+            && pane.buffer.document == document
+        {
+            pane.buffer.remap_edits(edits);
         }
     }
 

@@ -41,10 +41,9 @@ Environment:
   ANVIL_SYNCHRONIZED_OUTPUT  Disable synchronized frame output with 0
   ANVIL_OSC52            Enable OSC 52 clipboard write fallback with 1
   ANVIL_SETTINGS         Explicit settings.toml path
-  ANVIL_EDITOR_SCROLL_MARGIN  Viewport scroll margin (0-16)
-  ANVIL_EDITOR_MAX_BUFFERS  Maximum foreground buffers (1-99)
-  ANVIL_SEARCH_CASE_SENSITIVE Search default: true or false
-  ANVIL_LSP_INLAY_HINTS  Inlay hints: true or false
+  Deprecated: per-setting ANVIL_EDITOR_*, ANVIL_COMPLETION_*, ANVIL_SEARCH_*,
+  ANVIL_LSP[_<LANG>], and ANVIL_KEYMAP_PRESET; move values to settings.toml,
+  languages.toml, or keymap.toml.
   ANVIL_BUNDLED_PLUGIN_DIR  Explicit bundled official plugin directory
   ANVIL_PLUGIN_DIR       Additional local plugin directory
 

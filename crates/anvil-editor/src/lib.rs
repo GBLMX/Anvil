@@ -144,6 +144,22 @@ fn record_heap_bytes(record: &EditRecord) -> usize {
         }
 }
 
+/// One applied text mutation in the coordinates it was applied to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct EditDelta {
+    pub start: usize,
+    pub old_len: usize,
+    pub new_len: usize,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct EditDeltaRecord {
+    base_revision: u64,
+    delta: EditDelta,
+}
+
+const MAX_EDIT_DELTAS: usize = 4096;
+
 /// Mutable editor state.
 #[derive(Debug, Clone)]
 pub struct EditorState {
@@ -155,6 +171,8 @@ pub struct EditorState {
     interaction_mode: InteractionMode,
     undo: Vec<EditRecord>,
     redo: Vec<EditRecord>,
+    edit_deltas: Vec<EditDeltaRecord>,
+    edit_delta_floor: u64,
     yank: String,
     registers: HashMap<char, String>,
     macros: HashMap<char, Vec<MacroStep>>,
@@ -194,10 +212,46 @@ impl EditorState {
             interaction_mode: InteractionMode::Select,
             undo: Vec::new(),
             redo: Vec::new(),
+            edit_deltas: Vec::new(),
+            edit_delta_floor: 0,
             yank: String::new(),
             registers: HashMap::new(),
             macros: HashMap::new(),
         }
+    }
+
+    /// Text edits applied since `revision`, in application order.
+    ///
+    /// Returns `None` when the journal no longer reaches `revision`.
+    pub fn text_edits_since(&self, revision: u64) -> Option<Vec<EditDelta>> {
+        if revision < self.edit_delta_floor {
+            return None;
+        }
+        Some(
+            self.edit_deltas
+                .iter()
+                .filter(|record| record.base_revision >= revision)
+                .map(|record| record.delta)
+                .collect(),
+        )
+    }
+
+    fn record_edit(&mut self, start: usize, old_len: usize, new_len: usize) {
+        if old_len == 0 && new_len == 0 {
+            return;
+        }
+        if self.edit_deltas.len() >= MAX_EDIT_DELTAS {
+            self.edit_deltas.clear();
+            self.edit_delta_floor = self.revision.saturating_add(1);
+        }
+        self.edit_deltas.push(EditDeltaRecord {
+            base_revision: self.revision,
+            delta: EditDelta {
+                start,
+                old_len,
+                new_len,
+            },
+        });
     }
 
     /// Current text buffer.
@@ -743,6 +797,7 @@ impl EditorState {
 
         for (at, text) in &edits {
             self.apply_insert_text(*at, text);
+            self.record_edit(*at, 0, text.len());
         }
         self.index = Arc::new(LineIndex::from_buffer(&*self.text));
 
@@ -864,6 +919,7 @@ impl EditorState {
     fn apply_insert(&mut self, at: usize, text: &str) {
         self.apply_insert_text(at, text);
         Arc::make_mut(&mut self.index).apply_insert(&*self.text, at, text);
+        self.record_edit(at, 0, text.len());
     }
 
     fn apply_insert_text(&mut self, at: usize, text: &str) {
@@ -872,9 +928,12 @@ impl EditorState {
     }
 
     fn apply_delete(&mut self, range: Range<usize>) {
+        let start = range.start;
+        let old_len = range.end - start;
         let buffer = Arc::make_mut(&mut self.text);
         buffer.delete(range.clone());
         Arc::make_mut(&mut self.index).apply_edit(buffer, range);
+        self.record_edit(start, old_len, 0);
     }
 
     fn push_record(&mut self, action: EditAction, before: Vec<(usize, usize)>) {
