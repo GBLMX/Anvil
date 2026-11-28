@@ -3347,10 +3347,9 @@ mod tests {
     fn parses_file_watching_and_env_override() {
         let settings = parse("[editor]\nfile_watching = false\n").expect("file watching");
         assert!(!settings.editor.file_watching);
-        let settings = apply_env(settings, |name| {
+        let (settings, _) = apply_env(settings, |name| {
             (name == ENV_FILE_WATCHING).then(|| "true".to_owned())
-        })
-        .expect("env");
+        });
         assert!(settings.editor.file_watching);
     }
 
@@ -3577,7 +3576,7 @@ mod tests {
 
     #[test]
     fn environment_overrides_file_values() {
-        let settings = apply_env(
+        let (settings, warnings) = apply_env(
             parse("[editor]\nscroll_margin = 1\n[search]\ncase_sensitive = true\n[lsp]\ninlay_hints = false\n")
                 .expect("file"),
             |name| match name {
@@ -3587,8 +3586,8 @@ mod tests {
                 ENV_INLAY_HINTS => Some("true".to_owned()),
                 _ => None,
             },
-        )
-        .expect("env");
+        );
+        assert!(warnings.is_empty(), "{warnings:?}");
         assert_eq!(settings.editor.max_buffers, 12);
         assert_eq!(settings.editor.scroll_margin, 4);
         assert!(!settings.search.case_sensitive);
@@ -3596,24 +3595,35 @@ mod tests {
     }
 
     #[test]
-    fn environment_errors_are_visible() {
+    fn invalid_environment_values_warn_and_keep_file_values() {
+        let (settings, warnings) = apply_env(
+            parse("[editor]\nscroll_margin = 1\nmax_buffers = 4\n[lsp]\ninlay_hints = false\n")
+                .expect("file"),
+            |name| match name {
+                ENV_SCROLL_MARGIN => Some("99".to_owned()),
+                ENV_MAX_BUFFERS => Some("100".to_owned()),
+                ENV_INLAY_HINTS => Some("maybe".to_owned()),
+                _ => None,
+            },
+        );
+        assert_eq!(settings.editor.scroll_margin, 1);
+        assert_eq!(settings.editor.max_buffers, 4);
+        assert!(!settings.lsp.inlay_hints);
+        assert_eq!(warnings.len(), 3, "{warnings:?}");
         assert!(
-            apply_env(Settings::default(), |name| {
-                (name == ENV_SCROLL_MARGIN).then(|| "99".to_owned())
-            })
-            .is_err()
+            warnings
+                .iter()
+                .any(|warning| warning.contains(ENV_SCROLL_MARGIN))
         );
         assert!(
-            apply_env(Settings::default(), |name| {
-                (name == ENV_MAX_BUFFERS).then(|| "100".to_owned())
-            })
-            .is_err()
+            warnings
+                .iter()
+                .any(|warning| warning.contains(ENV_MAX_BUFFERS))
         );
         assert!(
-            apply_env(Settings::default(), |name| {
-                (name == ENV_INLAY_HINTS).then(|| "maybe".to_owned())
-            })
-            .is_err()
+            warnings
+                .iter()
+                .any(|warning| warning.contains(ENV_INLAY_HINTS))
         );
     }
 
@@ -3638,10 +3648,9 @@ mod accessibility_tests {
         let settings = parse("[ui]\nreduced_motion = true\nhigh_contrast = true\n").expect("parse");
         assert!(settings.ui.reduced_motion);
         assert!(settings.ui.high_contrast);
-        let settings = apply_env(settings, |name| {
+        let (settings, _) = apply_env(settings, |name| {
             (name == ENV_REDUCED_MOTION).then(|| "false".to_owned())
-        })
-        .expect("env");
+        });
         assert!(!settings.ui.reduced_motion);
         assert!(settings.ui.high_contrast);
     }
@@ -3828,6 +3837,152 @@ mod language_settings_tests {
             .expect("field");
         assert_eq!(field["explicit"], "7");
         assert_eq!(field["value"], "7");
+    }
+
+    #[test]
+    fn settings_check_warns_for_deprecated_environment_overrides() {
+        let _guard = TEST_ENV_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        let dir = tempfile::tempdir().expect("tempdir");
+        let names = [
+            ENV_SCROLL_MARGIN,
+            "ANVIL_LSP",
+            "ANVIL_LSP_RUST",
+            "ANVIL_KEYMAP_PRESET",
+        ];
+        let previous = names
+            .iter()
+            .map(|name| (*name, std::env::var_os(name)))
+            .collect::<Vec<_>>();
+        let previous_settings = std::env::var_os("ANVIL_SETTINGS");
+        let previous_config = std::env::var_os("XDG_CONFIG_HOME");
+        unsafe {
+            std::env::remove_var("ANVIL_SETTINGS");
+            std::env::set_var("XDG_CONFIG_HOME", dir.path().join("config"));
+            std::env::set_var(ENV_SCROLL_MARGIN, "9");
+            std::env::set_var("ANVIL_LSP", "/bin/true");
+            std::env::set_var("ANVIL_LSP_RUST", "/bin/true");
+            std::env::set_var("ANVIL_KEYMAP_PRESET", "ergo");
+        }
+        let report = settings_check(dir.path(), true);
+        unsafe {
+            for (name, value) in previous {
+                match value {
+                    Some(value) => std::env::set_var(name, value),
+                    None => std::env::remove_var(name),
+                }
+            }
+            match previous_settings {
+                Some(value) => std::env::set_var("ANVIL_SETTINGS", value),
+                None => std::env::remove_var("ANVIL_SETTINGS"),
+            }
+            match previous_config {
+                Some(value) => std::env::set_var("XDG_CONFIG_HOME", value),
+                None => std::env::remove_var("XDG_CONFIG_HOME"),
+            }
+        }
+        let text = report.text();
+        assert!(
+            text.contains(
+                "warning ANVIL_EDITOR_SCROLL_MARGIN is deprecated; set editor.scroll_margin in settings.toml instead"
+            ),
+            "{text}"
+        );
+        assert!(
+            text.contains("warning ANVIL_LSP is deprecated; configure [lsp.commands]"),
+            "{text}"
+        );
+        assert!(
+            text.contains("warning ANVIL_LSP_RUST is deprecated; configure [lsp.commands]"),
+            "{text}"
+        );
+        assert!(
+            text.contains(
+                "warning ANVIL_KEYMAP_PRESET is deprecated; set preset in keymap.toml instead"
+            ),
+            "{text}"
+        );
+        assert!(text.contains("field editor.scroll_margin = 9"), "{text}");
+    }
+
+    #[test]
+    fn invalid_deprecated_environment_value_does_not_fail_settings_check() {
+        let _guard = TEST_ENV_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        let dir = tempfile::tempdir().expect("tempdir");
+        let previous_margin = std::env::var_os(ENV_SCROLL_MARGIN);
+        let previous_settings = std::env::var_os("ANVIL_SETTINGS");
+        let previous_config = std::env::var_os("XDG_CONFIG_HOME");
+        unsafe {
+            std::env::remove_var("ANVIL_SETTINGS");
+            std::env::set_var("XDG_CONFIG_HOME", dir.path().join("config"));
+            std::env::set_var(ENV_SCROLL_MARGIN, "99");
+        }
+        let report = settings_check(dir.path(), true);
+        unsafe {
+            match previous_margin {
+                Some(value) => std::env::set_var(ENV_SCROLL_MARGIN, value),
+                None => std::env::remove_var(ENV_SCROLL_MARGIN),
+            }
+            match previous_settings {
+                Some(value) => std::env::set_var("ANVIL_SETTINGS", value),
+                None => std::env::remove_var("ANVIL_SETTINGS"),
+            }
+            match previous_config {
+                Some(value) => std::env::set_var("XDG_CONFIG_HOME", value),
+                None => std::env::remove_var("XDG_CONFIG_HOME"),
+            }
+        }
+        assert!(report.error.is_none(), "{:?}", report.error);
+        let text = report.text();
+        assert!(
+            text.contains("ignored ANVIL_EDITOR_SCROLL_MARGIN must be 0..=16, got 99"),
+            "{text}"
+        );
+    }
+
+    #[test]
+    fn config_reload_reports_deprecated_environment_overrides() {
+        let _guard = TEST_ENV_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        let dir = tempfile::tempdir().expect("tempdir");
+        let previous_margin = std::env::var_os(ENV_SCROLL_MARGIN);
+        let previous_settings = std::env::var_os("ANVIL_SETTINGS");
+        let previous_config = std::env::var_os("XDG_CONFIG_HOME");
+        unsafe {
+            std::env::remove_var("ANVIL_SETTINGS");
+            std::env::set_var("XDG_CONFIG_HOME", dir.path().join("config"));
+            std::env::set_var(ENV_SCROLL_MARGIN, "9");
+        }
+        let mut model = crate::Model::new(crate::EditorState::from_text(""), None);
+        model.workspace.path = dir.path().to_path_buf();
+        model.reload_config();
+        unsafe {
+            match previous_margin {
+                Some(value) => std::env::set_var(ENV_SCROLL_MARGIN, value),
+                None => std::env::remove_var(ENV_SCROLL_MARGIN),
+            }
+            match previous_settings {
+                Some(value) => std::env::set_var("ANVIL_SETTINGS", value),
+                None => std::env::remove_var("ANVIL_SETTINGS"),
+            }
+            match previous_config {
+                Some(value) => std::env::set_var("XDG_CONFIG_HOME", value),
+                None => std::env::remove_var("XDG_CONFIG_HOME"),
+            }
+        }
+        assert_eq!(model.config.settings.editor.scroll_margin, 9);
+        assert!(
+            model
+                .status
+                .text
+                .contains("ANVIL_EDITOR_SCROLL_MARGIN is deprecated"),
+            "{}",
+            model.status.text
+        );
     }
 
     #[test]
