@@ -66,8 +66,11 @@ impl<'a> Lexer<'a> {
             .and_then(std::ffi::OsStr::to_str)
             .unwrap_or_default()
             .to_ascii_lowercase();
-        let block_comment =
-            matches!(extension.as_str(), "rs" | "go" | "jsonc").then_some(("/*", "*/"));
+        let block_comment = match extension.as_str() {
+            "hs" | "lhs" => Some(("{-", "-}")),
+            "rs" | "go" | "jsonc" => Some(("/*", "*/")),
+            _ => None,
+        };
         let single_quote = !matches!(extension.as_str(), "rs" | "go");
         Self {
             text,

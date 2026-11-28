@@ -171,16 +171,19 @@ jobs:
           cargo test -p anvil-tui --features official-language-typst
           cargo test -p anvil-tui --features official-language-lua
           cargo test -p anvil-tui --features official-language-web
+          cargo test -p anvil-syntax --features haskell
+          cargo test -p anvil-tui --features official-language-haskell
           cargo test -p anvil-tui --features official-language-c-family
-          cargo check -p anvil-tui --features official-git,official-language-latex,official-language-typst,official-language-lua,official-language-web,official-language-c-family
-          cargo check -p anvil-tui --no-default-features --features language-pack-rust,language-pack-typescript,language-pack-lua,language-pack-c-family
-          cargo check -p anvil-distro-standard --no-default-features --features language-pack-rust,language-pack-typescript,language-pack-lua,language-pack-c-family
+          cargo check -p anvil-tui --features official-git,official-language-latex,official-language-typst,official-language-lua,official-language-web,official-language-haskell,official-language-c-family
+          cargo check -p anvil-tui --no-default-features --features language-pack-rust,language-pack-typescript,language-pack-lua,language-pack-haskell,language-pack-c-family
+          cargo check -p anvil-distro-standard --no-default-features --features language-pack-rust,language-pack-typescript,language-pack-lua,language-pack-haskell,language-pack-c-family
           cargo test -p anvil-distro-standard --no-default-features
           cargo test -p anvil-distro-standard --features official-workspace-index
           cargo test -p anvil-distro-standard --features official-language-latex
           cargo test -p anvil-distro-standard --features official-language-typst
           cargo test -p anvil-distro-standard --features official-language-lua
           cargo test -p anvil-distro-standard --features official-language-web
+          cargo test -p anvil-distro-standard --features official-language-haskell
           cargo test -p anvil-distro-standard --features official-language-c-family
           cargo test -p anvil-distro-standard --features official-desktop
           cargo test -p anvil-distro-standard --all-features

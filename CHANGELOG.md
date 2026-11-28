@@ -8,6 +8,9 @@ post-`0.5.0` feature line.
 
 ## [Unreleased]
 ### Added
+- Haskell support: `.hs` syntax highlighting and symbols via
+  `official-language-haskell`, plus built-in `haskell-language-server`
+  discovery for `.hs`/`.lhs` files.
 - `anvil-project` provides a UI-neutral project model and a read-only
   `cargo metadata` adapter for roots, targets, source roots, and capabilities.
 - `anvil-integrations` defines closed execution capabilities, descriptor

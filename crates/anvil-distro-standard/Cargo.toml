@@ -16,10 +16,12 @@ official-language-latex = ["anvil-tui/official-language-latex", "dep:anvil-mod-l
 official-language-typst = ["anvil-tui/official-language-typst", "dep:anvil-mod-language-typst"]
 official-language-lua = ["anvil-tui/official-language-lua"]
 official-language-web = ["anvil-tui/official-language-web"]
+official-language-haskell = ["anvil-tui/official-language-haskell"]
 official-language-c-family = ["anvil-tui/official-language-c-family"]
 language-pack-rust = ["anvil-tui/language-pack-rust"]
 language-pack-typescript = ["anvil-tui/language-pack-typescript"]
 language-pack-lua = ["anvil-tui/language-pack-lua"]
+language-pack-haskell = ["anvil-tui/language-pack-haskell"]
 language-pack-c-family = ["anvil-tui/language-pack-c-family"]
 full = [
     "official-git",
@@ -29,10 +31,12 @@ full = [
     "official-language-typst",
     "official-language-lua",
     "official-language-web",
+    "official-language-haskell",
     "official-language-c-family",
     "language-pack-rust",
     "language-pack-typescript",
     "language-pack-lua",
+    "language-pack-haskell",
     "language-pack-c-family",
 ]
 
