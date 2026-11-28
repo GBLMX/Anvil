@@ -2079,3 +2079,51 @@ fn split_selections_clamp_when_the_other_pane_deletes_across_them() {
     assert_eq!(model.session.editor.selection_bytes(), vec![(1, 2), (2, 3)]);
     assert_eq!(model.session.cursor, 2);
 }
+
+#[test]
+fn split_selections_shift_when_the_other_pane_multi_inserts() {
+    let mut model = Model::new(EditorState::from_text("ab\ncd"), None);
+    model.split_vertical();
+    model.focus_split(true);
+    assert!(model.session.editor.try_set_selection_bytes(1, 1).is_ok());
+    model.session.cursor = 1;
+    model.focus_split(false);
+
+    assert!(
+        model
+            .session
+            .editor
+            .try_set_selections_bytes(vec![(0, 0), (3, 3)])
+            .is_ok()
+    );
+    model.session.cursor = 0;
+    assert!(model.session.editor.insert_at_selections("X"));
+    assert_eq!(model.session.editor.text().slice(0..7), "Xab\nXcd");
+
+    model.focus_split(true);
+    assert_eq!(model.session.editor.selection_bytes(), vec![(2, 2)]);
+    assert_eq!(model.session.cursor, 2);
+}
+
+#[test]
+fn split_selections_shift_when_the_other_pane_multi_deletes() {
+    let mut model = Model::new(EditorState::from_text("Xab\nXcd"), None);
+    model.split_vertical();
+    model.focus_split(true);
+    assert!(model.session.editor.try_set_selection_bytes(2, 2).is_ok());
+    model.session.cursor = 2;
+    model.focus_split(false);
+
+    assert!(
+        model
+            .session
+            .editor
+            .try_apply_transaction(vec![(0..1, String::new()), (4..5, String::new())])
+            .is_ok()
+    );
+    assert_eq!(model.session.editor.text().slice(0..5), "ab\ncd");
+
+    model.focus_split(true);
+    assert_eq!(model.session.editor.selection_bytes(), vec![(1, 1)]);
+    assert_eq!(model.session.cursor, 1);
+}
