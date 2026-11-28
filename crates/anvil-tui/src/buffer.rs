@@ -10,7 +10,21 @@ use serde_json::json;
 use std::sync::Arc;
 impl Model {
     pub(crate) fn sync_active(&mut self) {
-        let document = self.buffers.document_mut(self.buffers.active_id);
+        let active_id = self.buffers.active_id;
+        let old_text = self
+            .buffers
+            .document(active_id)
+            .filter(|document| document.session.revision() != self.session.editor.revision())
+            .map(|document| {
+                let text = document.session.text();
+                text.slice(0..text.len_bytes())
+            });
+        if let Some(old_text) = old_text {
+            let text = self.session.editor.text();
+            let new_text = text.slice(0..text.len_bytes());
+            self.buffers.remap_views(active_id, &old_text, &new_text);
+        }
+        let document = self.buffers.document_mut(active_id);
         if let Some(document) = document {
             document.session = self.session.editor.clone();
             document.path = self.session.path.clone();
@@ -18,18 +32,47 @@ impl Model {
             document.missing = self.file.missing;
             document.syntax = self.syntax_cache.highlights.borrow().active_cache();
         }
+        let selections = self.current_selections();
+        if let Some((_, head)) = selections.first() {
+            self.session.cursor = *head;
+        }
         let view = if self.ui.focus.split {
             self.buffers.split.as_mut().map(|pane| &mut pane.buffer)
         } else {
             self.buffers.entries.get_mut(self.buffers.active)
         };
         if let Some(view) = view {
-            view.cursor = self.session.cursor;
+            view.set_selections(selections);
             view.scroll = self.view.scroll;
             view.hscroll = self.view.hscroll;
             view.visual_anchor = self.edit.visual_anchor;
             view.visual_line = self.edit.visual_line;
             view.search_query = self.search.query.clone();
+        }
+    }
+
+    pub(crate) fn restore_view_selections(&mut self, view: &View) {
+        let selections = {
+            let text = self.session.editor.text();
+            let len = text.len_bytes();
+            let mut selections = if view.selections.is_empty() {
+                vec![(view.cursor, view.cursor)]
+            } else {
+                view.selections.clone()
+            };
+            for (anchor, head) in &mut selections {
+                *anchor = clamp_offset(*anchor, len, text);
+                *head = clamp_offset(*head, len, text);
+            }
+            selections
+        };
+        self.session.cursor = selections.first().map_or(0, |(_, head)| *head);
+        let _ = self.session.editor.try_set_selections_bytes(selections);
+        if let Some(anchor) = view.visual_anchor {
+            let text = self.session.editor.text();
+            self.edit.visual_anchor = Some(clamp_offset(anchor, text.len_bytes(), text));
+        } else {
+            self.edit.visual_anchor = None;
         }
     }
 
@@ -44,14 +87,29 @@ impl Model {
         }
     }
 
+    pub(crate) fn current_selections(&self) -> Vec<(usize, usize)> {
+        let mut selections = self.session.editor.selection_bytes();
+        if let [(anchor, head)] = selections.as_slice()
+            && anchor == head
+            && *head != self.session.cursor
+        {
+            selections[0] = (self.session.cursor, self.session.cursor);
+        }
+        selections
+    }
+
     pub(crate) fn active_view_state(&self) -> View {
+        let selections = self.current_selections();
         View {
             id: self
                 .buffers
                 .active_view()
                 .map_or_else(ViewId::next, |view| view.id),
             document: self.buffers.active_id,
-            cursor: self.session.cursor,
+            cursor: selections
+                .first()
+                .map_or(self.session.cursor, |(_, head)| *head),
+            selections,
             scroll: self.view.scroll,
             hscroll: self.view.hscroll,
             visual_anchor: self.edit.visual_anchor,
@@ -405,11 +463,10 @@ impl Model {
         };
         let syntax = document.syntax.clone();
         self.file.missing = document.missing;
-        self.edit.visual_anchor = view.visual_anchor;
         self.edit.visual_line = view.visual_line;
         self.session.editor = document.session;
         self.session.path = document.path;
-        self.session.cursor = view.cursor;
+        self.restore_view_selections(&view);
         self.view.scroll = view.scroll;
         self.view.hscroll = view.hscroll;
         self.file.modified = document.modified;
@@ -428,6 +485,7 @@ impl Model {
         {
             pane.buffer.document = view.document;
             pane.buffer.cursor = self.session.cursor;
+            pane.buffer.selections = self.session.editor.selection_bytes();
             pane.buffer.scroll = self.view.scroll;
             pane.buffer.hscroll = self.view.hscroll;
         }
@@ -488,6 +546,7 @@ impl Model {
             id: ViewId::next(),
             document,
             cursor: 0,
+            selections: vec![(0, 0)],
             scroll: 0,
             hscroll: 0,
             visual_anchor: None,
@@ -745,6 +804,7 @@ impl Model {
                 id: ViewId::next(),
                 document,
                 cursor: 0,
+                selections: vec![(0, 0)],
                 scroll: 0,
                 hscroll: 0,
                 visual_anchor: None,
@@ -792,6 +852,7 @@ impl Model {
             id: ViewId::next(),
             document,
             cursor: 0,
+            selections: vec![(0, 0)],
             scroll: 0,
             hscroll: 0,
             visual_anchor: None,
@@ -972,4 +1033,12 @@ fn buffer_picker_registry() -> ProviderRegistry<dyn PickerSource> {
         )
         .expect("builtin buffer picker id is valid");
     registry
+}
+
+fn clamp_offset(mut at: usize, len: usize, text: &anvil_core::TextDocument) -> usize {
+    at = at.min(len);
+    while at > 0 && !text.is_char_boundary(at) {
+        at -= 1;
+    }
+    at
 }

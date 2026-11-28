@@ -2005,3 +2005,77 @@ fn split_views_share_document_edits_and_save_state() {
     );
     assert_eq!(fs::read_to_string(&path).expect("read"), "Xalpha");
 }
+
+#[test]
+fn split_views_keep_independent_selection_sets() {
+    let mut model = Model::new(EditorState::from_text("alpha\nbeta\ngamma"), None);
+    model.split_vertical();
+    model.focus_split(true);
+    assert!(
+        model
+            .session
+            .editor
+            .try_set_selections_bytes(vec![(0, 2), (6, 10)])
+            .is_ok()
+    );
+    model.session.cursor = 2;
+    model.focus_split(false);
+    assert_eq!(model.session.editor.selection_bytes(), vec![(0, 0)]);
+
+    assert!(model.session.editor.try_set_selection_bytes(3, 3).is_ok());
+    model.session.cursor = 3;
+    model.focus_split(true);
+    assert_eq!(
+        model.session.editor.selection_bytes(),
+        vec![(0, 2), (6, 10)]
+    );
+    assert_eq!(model.session.cursor, 2);
+
+    model.focus_split(false);
+    assert_eq!(model.session.editor.selection_bytes(), vec![(3, 3)]);
+}
+
+#[test]
+fn split_selections_shift_when_the_other_pane_inserts_before_them() {
+    let mut model = Model::new(EditorState::from_text("alpha\nbeta\n"), None);
+    model.split_vertical();
+    model.focus_split(true);
+    assert!(
+        model
+            .session
+            .editor
+            .try_set_selections_bytes(vec![(2, 2), (6, 10)])
+            .is_ok()
+    );
+    model.session.cursor = 2;
+    model.focus_split(false);
+
+    model.insert_text("XY");
+    model.focus_split(true);
+    assert_eq!(
+        model.session.editor.selection_bytes(),
+        vec![(4, 4), (8, 12)]
+    );
+    assert_eq!(model.session.cursor, 4);
+}
+
+#[test]
+fn split_selections_clamp_when_the_other_pane_deletes_across_them() {
+    let mut model = Model::new(EditorState::from_text("abcdef"), None);
+    model.split_vertical();
+    model.focus_split(true);
+    assert!(
+        model
+            .session
+            .editor
+            .try_set_selections_bytes(vec![(1, 3), (5, 6)])
+            .is_ok()
+    );
+    model.session.cursor = 1;
+    model.focus_split(false);
+
+    let _ = model.session.editor.try_delete(2..5);
+    model.focus_split(true);
+    assert_eq!(model.session.editor.selection_bytes(), vec![(1, 2), (2, 3)]);
+    assert_eq!(model.session.cursor, 2);
+}

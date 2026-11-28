@@ -48,11 +48,111 @@ pub(crate) struct View {
     pub(crate) id: ViewId,
     pub(crate) document: DocumentId,
     pub(crate) cursor: usize,
+    /// Full editor selection set; `cursor` is the primary head.
+    pub(crate) selections: Vec<(usize, usize)>,
     pub(crate) scroll: usize,
     pub(crate) hscroll: usize,
     pub(crate) visual_anchor: Option<usize>,
     pub(crate) visual_line: bool,
     pub(crate) search_query: String,
+}
+
+impl View {
+    pub(crate) fn set_selections(&mut self, selections: Vec<(usize, usize)>) {
+        self.selections = if selections.is_empty() {
+            vec![(self.cursor, self.cursor)]
+        } else {
+            selections
+        };
+        self.cursor = self
+            .selections
+            .first()
+            .map_or(self.cursor, |(_, head)| *head);
+    }
+
+    pub(crate) fn clamp_offsets(&mut self, len: usize, is_boundary: impl Fn(usize) -> bool) {
+        if self.selections.is_empty() {
+            self.selections.push((self.cursor, self.cursor));
+        }
+        for (anchor, head) in &mut self.selections {
+            *anchor = clamp_offset(*anchor, len, &is_boundary);
+            *head = clamp_offset(*head, len, &is_boundary);
+        }
+        self.cursor = self.selections.first().map_or(0, |(_, head)| *head);
+        self.visual_anchor = self
+            .visual_anchor
+            .map(|anchor| clamp_offset(anchor, len, &is_boundary));
+    }
+
+    pub(crate) fn remap_offsets(&mut self, old: &str, new: &str) {
+        let Some((start, old_end, new_end)) = changed_span(old, new) else {
+            return;
+        };
+        let inserted = new_end - start;
+        if self.selections.is_empty() {
+            self.selections.push((self.cursor, self.cursor));
+        }
+        for (anchor, head) in &mut self.selections {
+            *anchor = map_offset(*anchor, start, old_end, inserted);
+            *head = map_offset(*head, start, old_end, inserted);
+        }
+        self.cursor = self.selections.first().map_or(0, |(_, head)| *head);
+        self.visual_anchor = self
+            .visual_anchor
+            .map(|anchor| map_offset(anchor, start, old_end, inserted));
+    }
+}
+
+fn changed_span(old: &str, new: &str) -> Option<(usize, usize, usize)> {
+    if old == new {
+        return None;
+    }
+    let mut prefix = old
+        .bytes()
+        .zip(new.bytes())
+        .take_while(|(old, new)| old == new)
+        .count();
+    while prefix > 0 && (!old.is_char_boundary(prefix) || !new.is_char_boundary(prefix)) {
+        prefix -= 1;
+    }
+    let mut suffix = old
+        .bytes()
+        .rev()
+        .zip(new.bytes().rev())
+        .take_while(|(old, new)| old == new)
+        .count()
+        .min(old.len() - prefix)
+        .min(new.len() - prefix);
+    while suffix > 0
+        && (!old.is_char_boundary(old.len() - suffix) || !new.is_char_boundary(new.len() - suffix))
+    {
+        suffix -= 1;
+    }
+    Some((prefix, old.len() - suffix, new.len() - suffix))
+}
+
+fn map_offset(offset: usize, start: usize, old_end: usize, inserted: usize) -> usize {
+    if start == old_end {
+        if offset >= start {
+            offset + inserted
+        } else {
+            offset
+        }
+    } else if offset < start {
+        offset
+    } else if offset <= old_end {
+        start
+    } else {
+        offset - (old_end - start) + inserted
+    }
+}
+
+fn clamp_offset(mut at: usize, len: usize, is_boundary: &impl Fn(usize) -> bool) -> usize {
+    at = at.min(len);
+    while at > 0 && !is_boundary(at) {
+        at -= 1;
+    }
+    at
 }
 
 pub(crate) struct Pane {
@@ -1010,6 +1110,19 @@ impl BufferState {
     pub(crate) fn view_document_mut(&mut self, index: usize) -> Option<&mut Document> {
         let id = self.entries.get(index)?.document;
         self.document_mut(id)
+    }
+
+    pub(crate) fn remap_views(&mut self, document: DocumentId, old: &str, new: &str) {
+        for view in &mut self.entries {
+            if view.document == document {
+                view.remap_offsets(old, new);
+            }
+        }
+        if let Some(pane) = self.split.as_mut()
+            && pane.buffer.document == document
+        {
+            pane.buffer.remap_offsets(old, new);
+        }
     }
 
     pub(crate) fn active_view(&self) -> Option<&View> {

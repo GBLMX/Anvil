@@ -61,6 +61,7 @@ impl Model {
                 id: ViewId::next(),
                 document,
                 cursor: 0,
+                selections: vec![(0, 0)],
                 scroll: 0,
                 hscroll: 0,
                 visual_anchor: None,
@@ -101,6 +102,7 @@ impl Model {
                 id: ViewId::next(),
                 document,
                 cursor: 0,
+                selections: vec![(0, 0)],
                 scroll: 0,
                 hscroll: 0,
                 visual_anchor: None,
@@ -411,10 +413,11 @@ impl Model {
             }
         }
         for view in &mut self.buffers.entries {
-            view.cursor = view.cursor.min(text.len());
+            view.clamp_offsets(text.len(), |at| text.is_char_boundary(at));
         }
         if let Some(pane) = self.buffers.split.as_mut() {
-            pane.buffer.cursor = pane.buffer.cursor.min(text.len());
+            pane.buffer
+                .clamp_offsets(text.len(), |at| text.is_char_boundary(at));
         }
         self.sync_active();
         if active {
