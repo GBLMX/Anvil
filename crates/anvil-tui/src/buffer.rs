@@ -11,15 +11,28 @@ use std::sync::Arc;
 impl Model {
     pub(crate) fn sync_active(&mut self) {
         let active_id = self.buffers.active_id;
-        let old_text = self
+        let old_revision = self
             .buffers
             .document(active_id)
-            .filter(|document| document.session.revision() != self.session.editor.revision())
-            .map(|document| {
-                let text = document.session.text();
-                text.slice(0..text.len_bytes())
-            });
-        if let Some(old_text) = old_text {
+            .map(|document| document.session.revision());
+        let revision_changed =
+            old_revision.is_some_and(|revision| revision != self.session.editor.revision());
+        let edits = old_revision
+            .filter(|_| revision_changed)
+            .and_then(|revision| self.session.editor.text_edits_since(revision));
+        let old_text = if revision_changed && edits.is_none() {
+            old_revision.and_then(|_| {
+                self.buffers.document(active_id).map(|document| {
+                    let text = document.session.text();
+                    text.slice(0..text.len_bytes())
+                })
+            })
+        } else {
+            None
+        };
+        if let Some(edits) = edits {
+            self.buffers.remap_views_from_edits(active_id, &edits);
+        } else if let Some(old_text) = old_text {
             let text = self.session.editor.text();
             let new_text = text.slice(0..text.len_bytes());
             self.buffers.remap_views(active_id, &old_text, &new_text);

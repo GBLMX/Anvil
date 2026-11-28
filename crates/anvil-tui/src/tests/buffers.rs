@@ -2127,3 +2127,26 @@ fn split_selections_shift_when_the_other_pane_multi_deletes() {
     assert_eq!(model.session.editor.selection_bytes(), vec![(1, 1)]);
     assert_eq!(model.session.cursor, 1);
 }
+
+#[test]
+fn split_selections_shift_when_the_other_pane_replaces_a_prefix() {
+    let mut model = Model::new(EditorState::from_text("one two"), None);
+    model.split_vertical();
+    model.focus_split(true);
+    assert!(model.session.editor.try_set_selection_bytes(5, 5).is_ok());
+    model.session.cursor = 5;
+    model.focus_split(false);
+
+    assert!(
+        model
+            .session
+            .editor
+            .try_apply_transaction(vec![(0..3, "thon".to_owned())])
+            .is_ok()
+    );
+    assert_eq!(model.session.editor.text().slice(0..8), "thon two");
+
+    model.focus_split(true);
+    assert_eq!(model.session.editor.selection_bytes(), vec![(6, 6)]);
+    assert_eq!(model.session.cursor, 6);
+}

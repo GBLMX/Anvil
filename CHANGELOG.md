@@ -82,6 +82,9 @@ post-`0.5.0` feature line.
 
 ### Changed
 - TUI LSP requests keep one pending record per id, keyword completion borrows the syntax cache, and split session saves reuse one swap file instead of cloning every view and writing the buffer twice.
+- Deprecated per-setting `ANVIL_*` environment overrides now warn through
+  `settings check`, `doctor`, and `:config-reload`; invalid deprecated values
+  are ignored instead of failing startup.
 - TUI buffers now separate document state (text, undo, path, modified, syntax) from view state (cursor, scroll, selection, search); split panes share one document and keep independent cursors, and saves update every view.
 - `anvil-mcp` now accepts legacy `initialize` versions `2025-06-18` and
   `2025-11-25`; `2024-11-05` and `2025-03-26` are rejected with `-32022`.
@@ -110,8 +113,8 @@ post-`0.5.0` feature line.
 
 ### Fixed
 - Split views preserve independent multi-cursor selections, remap them across
-  multiple insertions and deletions in the shared document, and persist them
-  with the workspace session.
+  multiple insertions, deletions, and replacements in the shared document, and
+  persist them with the workspace session.
 - Insert-mode completion now triggers on the language server's advertised
   `triggerCharacters` (and `/` for path completion), sends trigger-character
   and incomplete-list request contexts, re-requests truncated lists while

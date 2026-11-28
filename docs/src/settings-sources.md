@@ -8,10 +8,12 @@ Anvil resolves typed settings from these sources, in order:
 3. a trusted workspace `.anvil.toml`;
 4. environment variables.
 
-Environment variables are a current compatibility source, but ADR-0075
-proposes deprecating per-field environment overrides. The
-[environment inventory](#environment-inventory) separates migration targets
-from bootstrap and operational variables.
+Per-field environment overrides are deprecated by ADR-0075. `settings check`,
+`doctor`, and `:config-reload` warn when a deprecated variable is set, and an
+invalid deprecated value is ignored instead of failing startup. Removal is
+allowed no earlier than `0.8.0`, after the warning path and migration tests
+land. The [environment inventory](#environment-inventory) separates migration
+targets from bootstrap and operational variables.
 
 This page documents the current implementation. Sparse user saves,
 reset-to-inherited, the metadata registry, and the registry-driven overlay are

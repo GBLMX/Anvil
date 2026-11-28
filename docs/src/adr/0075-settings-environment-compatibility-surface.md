@@ -1,6 +1,7 @@
 # ADR-0075: Settings Environment Compatibility Surface
 
-- Status: Proposed
+- Status: Accepted; warning path and migration tests landed 2026-11-28; removal
+  pending.
 - Version: 1.0.0
 - Date: 2026-11-24
 - Related: [ADR-0038](0038-project-settings-trust.md),

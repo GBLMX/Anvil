@@ -1,6 +1,7 @@
 //! TUI state groups and view/editor snapshots.
 
 use super::*;
+use anvil_editor::EditDelta;
 use anvil_lsp_client as lsp;
 use anvil_session::plugin_provider::{PluginProviderRegistry, PluginProviderRequests};
 use anvil_session::provider::{CancellationToken, PickerEntry, ProviderId};
@@ -84,6 +85,21 @@ impl View {
             .map(|anchor| clamp_offset(anchor, len, &is_boundary));
     }
 
+    pub(crate) fn remap_edits(&mut self, edits: &[EditDelta]) {
+        if edits.is_empty() {
+            return;
+        }
+        if self.selections.is_empty() {
+            self.selections.push((self.cursor, self.cursor));
+        }
+        for (anchor, head) in &mut self.selections {
+            *anchor = map_edits(*anchor, edits);
+            *head = map_edits(*head, edits);
+        }
+        self.cursor = self.selections.first().map_or(0, |(_, head)| *head);
+        self.visual_anchor = self.visual_anchor.map(|anchor| map_edits(anchor, edits));
+    }
+
     pub(crate) fn remap_offsets(&mut self, old: &str, new: &str) {
         let Some(mapping) = OffsetMap::between(old, new) else {
             return;
@@ -98,6 +114,31 @@ impl View {
         self.cursor = self.selections.first().map_or(0, |(_, head)| *head);
         self.visual_anchor = self.visual_anchor.map(|anchor| mapping.map(anchor));
     }
+}
+
+fn map_edits(mut offset: usize, edits: &[EditDelta]) -> usize {
+    let mut index = 0;
+    while index < edits.len() {
+        let edit = edits[index];
+        if edit.old_len > 0
+            && edit.new_len == 0
+            && let Some(insert) = edits.get(index + 1)
+            && insert.start == edit.start
+            && insert.old_len == 0
+        {
+            offset = map_offset(
+                offset,
+                edit.start,
+                edit.start + edit.old_len,
+                insert.new_len,
+            );
+            index += 2;
+            continue;
+        }
+        offset = map_offset(offset, edit.start, edit.start + edit.old_len, edit.new_len);
+        index += 1;
+    }
+    offset
 }
 
 enum OffsetMap {
@@ -1229,6 +1270,22 @@ impl BufferState {
             && pane.buffer.document == document
         {
             pane.buffer.remap_offsets(old, new);
+        }
+    }
+
+    pub(crate) fn remap_views_from_edits(&mut self, document: DocumentId, edits: &[EditDelta]) {
+        if edits.is_empty() {
+            return;
+        }
+        for view in &mut self.entries {
+            if view.document == document {
+                view.remap_edits(edits);
+            }
+        }
+        if let Some(pane) = self.split.as_mut()
+            && pane.buffer.document == document
+        {
+            pane.buffer.remap_edits(edits);
         }
     }
 

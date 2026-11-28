@@ -752,7 +752,6 @@ pub(crate) enum SettingsOrigin {
     Default,
     User,
     Project,
-    Environment,
     StartupOverride,
 }
 
@@ -775,7 +774,6 @@ impl SettingsSources {
     pub(crate) fn label(&self, key: SettingsKey) -> String {
         match self.origin(key) {
             SettingsOrigin::Default => "default".to_owned(),
-            SettingsOrigin::Environment => "environment".to_owned(),
             SettingsOrigin::StartupOverride => "startup override".to_owned(),
             SettingsOrigin::User => self
                 .user
@@ -1353,14 +1351,16 @@ fn load_from_layers_with_ignored(
             .join(", ");
         parse(&merged.to_string()).map_err(|error| format!("{names}: {error}"))?
     };
-    let settings = apply_env(settings, |name| std::env::var(name).ok())?;
+    let get_env = |name: &str| std::env::var(name).ok();
+    let (settings, env_warnings) = apply_env(settings, get_env);
+    warnings.extend(env_warnings);
     let inherited = if has_project {
         parse(&inherited_doc.to_string()).map_err(|error| format!("project settings: {error}"))?
     } else {
         Settings::default()
     };
-    let inherited = apply_env(inherited, |name| std::env::var(name).ok())?;
-    mark_env_sources(&mut sources, |name| std::env::var(name).ok());
+    let (inherited, _) = apply_env(inherited, get_env);
+    warnings.extend(deprecated_env_warnings(get_env));
     if std::env::var_os("ANVIL_THEME").is_some() {
         sources.set(SettingsKey::Theme, SettingsOrigin::StartupOverride);
     }
@@ -1507,16 +1507,6 @@ fn has_layer_key(document: &toml_edit::DocumentMut, path: &[&str]) -> bool {
         table = next;
     }
     true
-}
-
-fn mark_env_sources(sources: &mut SettingsSources, get: impl Fn(&str) -> Option<String>) {
-    for def in SETTINGS {
-        if let Some(name) = def.env
-            && get(name).is_some()
-        {
-            sources.set(def.key, SettingsOrigin::Environment);
-        }
-    }
 }
 
 fn read_settings_text(path: &Path) -> Result<String, String> {
@@ -1881,8 +1871,9 @@ fn parse_theme(theme: Option<ThemeFile>) -> Result<Choice, String> {
 fn apply_env(
     mut settings: Settings,
     get: impl Fn(&str) -> Option<String>,
-) -> Result<Settings, String> {
-    if let Some(value) = get(ENV_SCROLL_MARGIN) {
+) -> (Settings, Vec<String>) {
+    let mut warnings = Vec::new();
+    if let Some(margin) = env_value(&mut warnings, get(ENV_SCROLL_MARGIN), |value| {
         let margin = value.parse::<usize>().map_err(|_| {
             format!("{ENV_SCROLL_MARGIN} must be an integer 0..={MAX_SCROLL_MARGIN}")
         })?;
@@ -1891,9 +1882,11 @@ fn apply_env(
                 "{ENV_SCROLL_MARGIN} must be 0..={MAX_SCROLL_MARGIN}, got {margin}"
             ));
         }
+        Ok(margin)
+    }) {
         settings.editor.scroll_margin = margin;
     }
-    if let Some(value) = get(ENV_MAX_BUFFERS) {
+    if let Some(max_buffers) = env_value(&mut warnings, get(ENV_MAX_BUFFERS), |value| {
         let max_buffers = value
             .parse::<usize>()
             .map_err(|_| format!("{ENV_MAX_BUFFERS} must be an integer 1..={MAX_MAX_BUFFERS}"))?;
@@ -1902,21 +1895,31 @@ fn apply_env(
                 "{ENV_MAX_BUFFERS} must be 1..={MAX_MAX_BUFFERS}, got {max_buffers}"
             ));
         }
+        Ok(max_buffers)
+    }) {
         settings.editor.max_buffers = max_buffers;
     }
-    if let Some(value) = get(ENV_AUTO_SAVE) {
-        settings.editor.auto_save = parse_bool(ENV_AUTO_SAVE, &value)?;
+    if let Some(value) = env_value(&mut warnings, get(ENV_AUTO_SAVE), |value| {
+        parse_bool(ENV_AUTO_SAVE, value)
+    }) {
+        settings.editor.auto_save = value;
     }
-    if let Some(value) = get(ENV_SOFT_WRAP) {
-        settings.editor.soft_wrap = parse_bool(ENV_SOFT_WRAP, &value)?;
+    if let Some(value) = env_value(&mut warnings, get(ENV_SOFT_WRAP), |value| {
+        parse_bool(ENV_SOFT_WRAP, value)
+    }) {
+        settings.editor.soft_wrap = value;
     }
-    if let Some(value) = get(ENV_FORMAT_ON_SAVE) {
-        settings.editor.format_on_save = parse_bool(ENV_FORMAT_ON_SAVE, &value)?;
+    if let Some(value) = env_value(&mut warnings, get(ENV_FORMAT_ON_SAVE), |value| {
+        parse_bool(ENV_FORMAT_ON_SAVE, value)
+    }) {
+        settings.editor.format_on_save = value;
     }
-    if let Some(value) = get(ENV_FILE_WATCHING) {
-        settings.editor.file_watching = parse_bool(ENV_FILE_WATCHING, &value)?;
+    if let Some(value) = env_value(&mut warnings, get(ENV_FILE_WATCHING), |value| {
+        parse_bool(ENV_FILE_WATCHING, value)
+    }) {
+        settings.editor.file_watching = value;
     }
-    if let Some(value) = get(ENV_SIDEBAR_PERCENT) {
+    if let Some(percent) = env_value(&mut warnings, get(ENV_SIDEBAR_PERCENT), |value| {
         let percent = value.parse::<u16>().map_err(|_| {
             format!(
                 "{ENV_SIDEBAR_PERCENT} must be an integer {MIN_SIDEBAR_PERCENT}..={MAX_SIDEBAR_PERCENT}"
@@ -1927,21 +1930,31 @@ fn apply_env(
                 "{ENV_SIDEBAR_PERCENT} must be {MIN_SIDEBAR_PERCENT}..={MAX_SIDEBAR_PERCENT}, got {percent}"
             ));
         }
+        Ok(percent)
+    }) {
         settings.editor.sidebar_percent = percent;
     }
-    if let Some(value) = get(ENV_SEARCH_CASE_SENSITIVE) {
-        settings.search.case_sensitive = parse_bool(ENV_SEARCH_CASE_SENSITIVE, &value)?;
+    if let Some(value) = env_value(&mut warnings, get(ENV_SEARCH_CASE_SENSITIVE), |value| {
+        parse_bool(ENV_SEARCH_CASE_SENSITIVE, value)
+    }) {
+        settings.search.case_sensitive = value;
     }
-    if let Some(value) = get(ENV_INLAY_HINTS) {
-        settings.lsp.inlay_hints = parse_bool(ENV_INLAY_HINTS, &value)?;
+    if let Some(value) = env_value(&mut warnings, get(ENV_INLAY_HINTS), |value| {
+        parse_bool(ENV_INLAY_HINTS, value)
+    }) {
+        settings.lsp.inlay_hints = value;
     }
-    if let Some(value) = get(ENV_AUTO_BRACKETS) {
-        settings.completion.auto_brackets = parse_bool(ENV_AUTO_BRACKETS, &value)?;
+    if let Some(value) = env_value(&mut warnings, get(ENV_AUTO_BRACKETS), |value| {
+        parse_bool(ENV_AUTO_BRACKETS, value)
+    }) {
+        settings.completion.auto_brackets = value;
     }
-    if let Some(value) = get(ENV_AUTO_POPUP) {
-        settings.completion.auto_popup = parse_bool(ENV_AUTO_POPUP, &value)?;
+    if let Some(value) = env_value(&mut warnings, get(ENV_AUTO_POPUP), |value| {
+        parse_bool(ENV_AUTO_POPUP, value)
+    }) {
+        settings.completion.auto_popup = value;
     }
-    if let Some(value) = get(ENV_POPUP_DELAY_MS) {
+    if let Some(delay) = env_value(&mut warnings, get(ENV_POPUP_DELAY_MS), |value| {
         let delay = value
             .parse::<u16>()
             .map_err(|_| format!("{ENV_POPUP_DELAY_MS} must be an integer 0..=1000"))?;
@@ -1950,9 +1963,11 @@ fn apply_env(
                 "{ENV_POPUP_DELAY_MS} must be 0..=1000, got {delay}"
             ));
         }
+        Ok(delay)
+    }) {
         settings.completion.popup_delay_ms = delay;
     }
-    if let Some(value) = get(ENV_POPUP_TRIGGER_LEN) {
+    if let Some(length) = env_value(&mut warnings, get(ENV_POPUP_TRIGGER_LEN), |value| {
         let length = value
             .parse::<usize>()
             .map_err(|_| format!("{ENV_POPUP_TRIGGER_LEN} must be an integer 1..=10"))?;
@@ -1961,24 +1976,85 @@ fn apply_env(
                 "{ENV_POPUP_TRIGGER_LEN} must be 1..=10, got {length}"
             ));
         }
+        Ok(length)
+    }) {
         settings.completion.popup_trigger_len = length;
     }
-    if let Some(value) = get(ENV_POPUP_IN_COMMENTS) {
-        settings.completion.popup_in_comments = parse_bool(ENV_POPUP_IN_COMMENTS, &value)?;
+    if let Some(value) = env_value(&mut warnings, get(ENV_POPUP_IN_COMMENTS), |value| {
+        parse_bool(ENV_POPUP_IN_COMMENTS, value)
+    }) {
+        settings.completion.popup_in_comments = value;
     }
-    if let Some(value) = get(ENV_POPUP_IN_STRINGS) {
-        settings.completion.popup_in_strings = parse_bool(ENV_POPUP_IN_STRINGS, &value)?;
+    if let Some(value) = env_value(&mut warnings, get(ENV_POPUP_IN_STRINGS), |value| {
+        parse_bool(ENV_POPUP_IN_STRINGS, value)
+    }) {
+        settings.completion.popup_in_strings = value;
     }
-    if let Some(value) = get(ENV_INLINE_COMPLETION) {
-        settings.completion.inline_completion = parse_bool(ENV_INLINE_COMPLETION, &value)?;
+    if let Some(value) = env_value(&mut warnings, get(ENV_INLINE_COMPLETION), |value| {
+        parse_bool(ENV_INLINE_COMPLETION, value)
+    }) {
+        settings.completion.inline_completion = value;
     }
-    if let Some(value) = get(ENV_REDUCED_MOTION) {
-        settings.ui.reduced_motion = parse_bool(ENV_REDUCED_MOTION, &value)?;
+    if let Some(value) = env_value(&mut warnings, get(ENV_REDUCED_MOTION), |value| {
+        parse_bool(ENV_REDUCED_MOTION, value)
+    }) {
+        settings.ui.reduced_motion = value;
     }
-    if let Some(value) = get(ENV_HIGH_CONTRAST) {
-        settings.ui.high_contrast = parse_bool(ENV_HIGH_CONTRAST, &value)?;
+    if let Some(value) = env_value(&mut warnings, get(ENV_HIGH_CONTRAST), |value| {
+        parse_bool(ENV_HIGH_CONTRAST, value)
+    }) {
+        settings.ui.high_contrast = value;
     }
-    Ok(settings)
+    (settings, warnings)
+}
+
+fn env_value<T>(
+    warnings: &mut Vec<String>,
+    value: Option<String>,
+    parse: impl FnOnce(&str) -> Result<T, String>,
+) -> Option<T> {
+    let value = value?;
+    match parse(&value) {
+        Ok(value) => Some(value),
+        Err(error) => {
+            warnings.push(format!("ignored {error}"));
+            None
+        }
+    }
+}
+
+fn deprecated_env_warnings(get: impl Fn(&str) -> Option<String>) -> Vec<String> {
+    let mut warnings = Vec::new();
+    for def in SETTINGS {
+        let Some(name) = def.env else {
+            continue;
+        };
+        if get(name).is_some() {
+            warnings.push(format!(
+                "{name} is deprecated; set {} in settings.toml instead",
+                def.path
+            ));
+        }
+    }
+    if get("ANVIL_KEYMAP_PRESET").is_some() {
+        warnings.push(
+            "ANVIL_KEYMAP_PRESET is deprecated; set preset in keymap.toml instead".to_owned(),
+        );
+    }
+    let mut lsp_overrides = std::env::vars_os()
+        .filter_map(|(name, _)| name.into_string().ok())
+        .filter(|name| name == "ANVIL_LSP" || name.starts_with("ANVIL_LSP_"))
+        .filter(|name| name != ENV_INLAY_HINTS)
+        .filter(|name| get(name).is_some())
+        .collect::<Vec<_>>();
+    lsp_overrides.sort();
+    lsp_overrides.dedup();
+    warnings.extend(lsp_overrides.into_iter().map(|name| {
+        format!(
+            "{name} is deprecated; configure [lsp.commands] or a per-root [lsp.roots] profile instead"
+        )
+    }));
+    warnings
 }
 
 fn parse_bool(name: &str, value: &str) -> Result<bool, String> {
@@ -2848,6 +2924,9 @@ mod tests {
 
     #[test]
     fn project_layer_merges_over_user_settings() {
+        let _guard = TEST_ENV_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         let directory = tempfile::tempdir().expect("tempdir");
         let user = directory.path().join("user.toml");
         let project = directory.path().join(PROJECT_SETTINGS);
@@ -2920,18 +2999,26 @@ mod tests {
     }
 
     #[test]
-    fn environment_marks_field_origin() {
-        let mut sources = SettingsSources::default();
-        mark_env_sources(&mut sources, |name| {
-            (name == ENV_MAX_BUFFERS).then(|| "12".to_owned())
-        });
+    fn environment_override_keeps_the_file_source() {
+        let _guard = TEST_ENV_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        let directory = tempfile::tempdir().expect("tempdir");
+        let user = directory.path().join("settings.toml");
+        fs::write(&user, "[editor]\nscroll_margin = 2\n").expect("user settings");
+        let previous = std::env::var_os(ENV_SCROLL_MARGIN);
+        unsafe { std::env::set_var(ENV_SCROLL_MARGIN, "9") };
+        let loaded = load_from_layers_with_sources(Some(&user), None).expect("load");
+        unsafe {
+            match previous {
+                Some(value) => std::env::set_var(ENV_SCROLL_MARGIN, value),
+                None => std::env::remove_var(ENV_SCROLL_MARGIN),
+            }
+        }
+        assert_eq!(loaded.settings.editor.scroll_margin, 9);
         assert_eq!(
-            sources.origin(SettingsKey::MaxBuffers),
-            SettingsOrigin::Environment
-        );
-        assert_eq!(
-            sources.origin(SettingsKey::ScrollMargin),
-            SettingsOrigin::Default
+            loaded.sources.origin(SettingsKey::ScrollMargin),
+            SettingsOrigin::User
         );
     }
 
@@ -3260,10 +3347,9 @@ mod tests {
     fn parses_file_watching_and_env_override() {
         let settings = parse("[editor]\nfile_watching = false\n").expect("file watching");
         assert!(!settings.editor.file_watching);
-        let settings = apply_env(settings, |name| {
+        let (settings, _) = apply_env(settings, |name| {
             (name == ENV_FILE_WATCHING).then(|| "true".to_owned())
-        })
-        .expect("env");
+        });
         assert!(settings.editor.file_watching);
     }
 
@@ -3490,7 +3576,7 @@ mod tests {
 
     #[test]
     fn environment_overrides_file_values() {
-        let settings = apply_env(
+        let (settings, warnings) = apply_env(
             parse("[editor]\nscroll_margin = 1\n[search]\ncase_sensitive = true\n[lsp]\ninlay_hints = false\n")
                 .expect("file"),
             |name| match name {
@@ -3500,8 +3586,8 @@ mod tests {
                 ENV_INLAY_HINTS => Some("true".to_owned()),
                 _ => None,
             },
-        )
-        .expect("env");
+        );
+        assert!(warnings.is_empty(), "{warnings:?}");
         assert_eq!(settings.editor.max_buffers, 12);
         assert_eq!(settings.editor.scroll_margin, 4);
         assert!(!settings.search.case_sensitive);
@@ -3509,24 +3595,35 @@ mod tests {
     }
 
     #[test]
-    fn environment_errors_are_visible() {
+    fn invalid_environment_values_warn_and_keep_file_values() {
+        let (settings, warnings) = apply_env(
+            parse("[editor]\nscroll_margin = 1\nmax_buffers = 4\n[lsp]\ninlay_hints = false\n")
+                .expect("file"),
+            |name| match name {
+                ENV_SCROLL_MARGIN => Some("99".to_owned()),
+                ENV_MAX_BUFFERS => Some("100".to_owned()),
+                ENV_INLAY_HINTS => Some("maybe".to_owned()),
+                _ => None,
+            },
+        );
+        assert_eq!(settings.editor.scroll_margin, 1);
+        assert_eq!(settings.editor.max_buffers, 4);
+        assert!(!settings.lsp.inlay_hints);
+        assert_eq!(warnings.len(), 3, "{warnings:?}");
         assert!(
-            apply_env(Settings::default(), |name| {
-                (name == ENV_SCROLL_MARGIN).then(|| "99".to_owned())
-            })
-            .is_err()
+            warnings
+                .iter()
+                .any(|warning| warning.contains(ENV_SCROLL_MARGIN))
         );
         assert!(
-            apply_env(Settings::default(), |name| {
-                (name == ENV_MAX_BUFFERS).then(|| "100".to_owned())
-            })
-            .is_err()
+            warnings
+                .iter()
+                .any(|warning| warning.contains(ENV_MAX_BUFFERS))
         );
         assert!(
-            apply_env(Settings::default(), |name| {
-                (name == ENV_INLAY_HINTS).then(|| "maybe".to_owned())
-            })
-            .is_err()
+            warnings
+                .iter()
+                .any(|warning| warning.contains(ENV_INLAY_HINTS))
         );
     }
 
@@ -3551,10 +3648,9 @@ mod accessibility_tests {
         let settings = parse("[ui]\nreduced_motion = true\nhigh_contrast = true\n").expect("parse");
         assert!(settings.ui.reduced_motion);
         assert!(settings.ui.high_contrast);
-        let settings = apply_env(settings, |name| {
+        let (settings, _) = apply_env(settings, |name| {
             (name == ENV_REDUCED_MOTION).then(|| "false".to_owned())
-        })
-        .expect("env");
+        });
         assert!(!settings.ui.reduced_motion);
         assert!(settings.ui.high_contrast);
     }
@@ -3741,6 +3837,152 @@ mod language_settings_tests {
             .expect("field");
         assert_eq!(field["explicit"], "7");
         assert_eq!(field["value"], "7");
+    }
+
+    #[test]
+    fn settings_check_warns_for_deprecated_environment_overrides() {
+        let _guard = TEST_ENV_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        let dir = tempfile::tempdir().expect("tempdir");
+        let names = [
+            ENV_SCROLL_MARGIN,
+            "ANVIL_LSP",
+            "ANVIL_LSP_RUST",
+            "ANVIL_KEYMAP_PRESET",
+        ];
+        let previous = names
+            .iter()
+            .map(|name| (*name, std::env::var_os(name)))
+            .collect::<Vec<_>>();
+        let previous_settings = std::env::var_os("ANVIL_SETTINGS");
+        let previous_config = std::env::var_os("XDG_CONFIG_HOME");
+        unsafe {
+            std::env::remove_var("ANVIL_SETTINGS");
+            std::env::set_var("XDG_CONFIG_HOME", dir.path().join("config"));
+            std::env::set_var(ENV_SCROLL_MARGIN, "9");
+            std::env::set_var("ANVIL_LSP", "/bin/true");
+            std::env::set_var("ANVIL_LSP_RUST", "/bin/true");
+            std::env::set_var("ANVIL_KEYMAP_PRESET", "ergo");
+        }
+        let report = settings_check(dir.path(), true);
+        unsafe {
+            for (name, value) in previous {
+                match value {
+                    Some(value) => std::env::set_var(name, value),
+                    None => std::env::remove_var(name),
+                }
+            }
+            match previous_settings {
+                Some(value) => std::env::set_var("ANVIL_SETTINGS", value),
+                None => std::env::remove_var("ANVIL_SETTINGS"),
+            }
+            match previous_config {
+                Some(value) => std::env::set_var("XDG_CONFIG_HOME", value),
+                None => std::env::remove_var("XDG_CONFIG_HOME"),
+            }
+        }
+        let text = report.text();
+        assert!(
+            text.contains(
+                "warning ANVIL_EDITOR_SCROLL_MARGIN is deprecated; set editor.scroll_margin in settings.toml instead"
+            ),
+            "{text}"
+        );
+        assert!(
+            text.contains("warning ANVIL_LSP is deprecated; configure [lsp.commands]"),
+            "{text}"
+        );
+        assert!(
+            text.contains("warning ANVIL_LSP_RUST is deprecated; configure [lsp.commands]"),
+            "{text}"
+        );
+        assert!(
+            text.contains(
+                "warning ANVIL_KEYMAP_PRESET is deprecated; set preset in keymap.toml instead"
+            ),
+            "{text}"
+        );
+        assert!(text.contains("field editor.scroll_margin = 9"), "{text}");
+    }
+
+    #[test]
+    fn invalid_deprecated_environment_value_does_not_fail_settings_check() {
+        let _guard = TEST_ENV_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        let dir = tempfile::tempdir().expect("tempdir");
+        let previous_margin = std::env::var_os(ENV_SCROLL_MARGIN);
+        let previous_settings = std::env::var_os("ANVIL_SETTINGS");
+        let previous_config = std::env::var_os("XDG_CONFIG_HOME");
+        unsafe {
+            std::env::remove_var("ANVIL_SETTINGS");
+            std::env::set_var("XDG_CONFIG_HOME", dir.path().join("config"));
+            std::env::set_var(ENV_SCROLL_MARGIN, "99");
+        }
+        let report = settings_check(dir.path(), true);
+        unsafe {
+            match previous_margin {
+                Some(value) => std::env::set_var(ENV_SCROLL_MARGIN, value),
+                None => std::env::remove_var(ENV_SCROLL_MARGIN),
+            }
+            match previous_settings {
+                Some(value) => std::env::set_var("ANVIL_SETTINGS", value),
+                None => std::env::remove_var("ANVIL_SETTINGS"),
+            }
+            match previous_config {
+                Some(value) => std::env::set_var("XDG_CONFIG_HOME", value),
+                None => std::env::remove_var("XDG_CONFIG_HOME"),
+            }
+        }
+        assert!(report.error.is_none(), "{:?}", report.error);
+        let text = report.text();
+        assert!(
+            text.contains("ignored ANVIL_EDITOR_SCROLL_MARGIN must be 0..=16, got 99"),
+            "{text}"
+        );
+    }
+
+    #[test]
+    fn config_reload_reports_deprecated_environment_overrides() {
+        let _guard = TEST_ENV_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        let dir = tempfile::tempdir().expect("tempdir");
+        let previous_margin = std::env::var_os(ENV_SCROLL_MARGIN);
+        let previous_settings = std::env::var_os("ANVIL_SETTINGS");
+        let previous_config = std::env::var_os("XDG_CONFIG_HOME");
+        unsafe {
+            std::env::remove_var("ANVIL_SETTINGS");
+            std::env::set_var("XDG_CONFIG_HOME", dir.path().join("config"));
+            std::env::set_var(ENV_SCROLL_MARGIN, "9");
+        }
+        let mut model = crate::Model::new(crate::EditorState::from_text(""), None);
+        model.workspace.path = dir.path().to_path_buf();
+        model.reload_config();
+        unsafe {
+            match previous_margin {
+                Some(value) => std::env::set_var(ENV_SCROLL_MARGIN, value),
+                None => std::env::remove_var(ENV_SCROLL_MARGIN),
+            }
+            match previous_settings {
+                Some(value) => std::env::set_var("ANVIL_SETTINGS", value),
+                None => std::env::remove_var("ANVIL_SETTINGS"),
+            }
+            match previous_config {
+                Some(value) => std::env::set_var("XDG_CONFIG_HOME", value),
+                None => std::env::remove_var("XDG_CONFIG_HOME"),
+            }
+        }
+        assert_eq!(model.config.settings.editor.scroll_margin, 9);
+        assert!(
+            model
+                .status
+                .text
+                .contains("ANVIL_EDITOR_SCROLL_MARGIN is deprecated"),
+            "{}",
+            model.status.text
+        );
     }
 
     #[test]

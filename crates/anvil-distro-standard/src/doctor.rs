@@ -166,6 +166,11 @@ fn doctor_checks(
         check_remote(),
         check_runtime_dir(),
         check_config(),
+        check_deprecated_settings_env(
+            env::vars_os()
+                .filter_map(|(name, _)| name.into_string().ok())
+                .filter(|name| deprecated_settings_env(name)),
+        ),
         check_landlock(sandbox),
         check_sandbox(sandbox),
         check_lsp(),
@@ -502,6 +507,37 @@ fn check_config() -> DoctorCheck {
     }
 }
 
+fn check_deprecated_settings_env(names: impl IntoIterator<Item = String>) -> DoctorCheck {
+    let mut names = names.into_iter().collect::<Vec<_>>();
+    names.sort();
+    names.dedup();
+    if names.is_empty() {
+        return check(
+            "settings-env",
+            DoctorLevel::Ok,
+            "no deprecated settings environment overrides",
+            "",
+        );
+    }
+    check(
+        "settings-env",
+        DoctorLevel::Warn,
+        format!("deprecated overrides: {}", names.join(", ")),
+        "move these values to settings.toml or languages.toml",
+    )
+}
+
+fn deprecated_settings_env(name: &str) -> bool {
+    name == "ANVIL_LSP"
+        || name.starts_with("ANVIL_LSP_")
+        || name == "ANVIL_SEARCH_CASE_SENSITIVE"
+        || name == "ANVIL_KEYMAP_PRESET"
+        || name.starts_with("ANVIL_EDITOR_")
+        || name.starts_with("ANVIL_COMPLETION_")
+        || name == "ANVIL_REDUCED_MOTION"
+        || name == "ANVIL_HIGH_CONTRAST"
+}
+
 fn check_landlock(sandbox: &SandboxReport) -> DoctorCheck {
     #[cfg(target_os = "linux")]
     {
@@ -654,6 +690,23 @@ mod tests {
     use super::*;
     use crate::STANDARD;
     use crate::sandbox::SandboxStatus;
+
+    #[test]
+    fn settings_env_deprecation_check_warns_for_known_overrides() {
+        assert_eq!(
+            check_deprecated_settings_env(Vec::new()).level,
+            DoctorLevel::Ok
+        );
+        let report = check_deprecated_settings_env(vec![
+            "ANVIL_EDITOR_SCROLL_MARGIN".to_owned(),
+            "ANVIL_LSP_RUST".to_owned(),
+        ]);
+        assert_eq!(report.level, DoctorLevel::Warn);
+        assert!(report.message.contains("ANVIL_EDITOR_SCROLL_MARGIN"));
+        assert!(report.message.contains("ANVIL_LSP_RUST"));
+        assert!(deprecated_settings_env("ANVIL_KEYMAP_PRESET"));
+        assert!(!deprecated_settings_env("ANVIL_SETTINGS"));
+    }
 
     #[test]
     fn landlock_check_uses_the_probed_report() {
