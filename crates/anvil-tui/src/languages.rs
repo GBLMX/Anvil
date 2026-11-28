@@ -4,6 +4,7 @@ use super::*;
 
 const LANGUAGES: &[(&str, &[&str])] = &[
     ("Rust", &["rs"]),
+    ("Haskell", &["hs", "lhs"]),
     ("Go", &["go"]),
     ("Python", &["py", "pyi"]),
     ("TypeScript", &["ts", "mts", "cts"]),
@@ -58,9 +59,9 @@ impl Model {
             "Language readiness".to_owned(),
             format!("Workspace: {}", self.workspace.path.display()),
             "Packs are build-time compositions: Rust is always included;".to_owned(),
-            "TypeScript/JavaScript uses language-pack-typescript, C/C++ uses".to_owned(),
-            "language-pack-c-family, and Lua uses language-pack-lua. Rebuild to".to_owned(),
-            "change the included packs.".to_owned(),
+            "TypeScript/JavaScript uses language-pack-typescript, Haskell uses".to_owned(),
+            "language-pack-haskell, C/C++ uses language-pack-c-family, and Lua".to_owned(),
+            "uses language-pack-lua. Rebuild to change the included packs.".to_owned(),
             String::new(),
         ];
         for (name, extensions) in LANGUAGES {
@@ -158,6 +159,12 @@ mod tests {
         assert!(text.contains("formatter: external rust"), "{text}");
         assert!(text.contains("linter: not configured"), "{text}");
         assert!(text.contains("TypeScript"), "{text}");
+        let haskell = text.split("\nHaskell\n").nth(1).expect("haskell section");
+        #[cfg(feature = "official-language-haskell")]
+        assert!(haskell.contains("syntax: yes"), "{text}");
+        #[cfg(not(feature = "official-language-haskell"))]
+        assert!(haskell.contains("syntax: missing"), "{text}");
+        assert!(haskell.contains("lsp: haskell language server"), "{text}");
         let typescript = text
             .split("\nTypeScript\n")
             .nth(1)

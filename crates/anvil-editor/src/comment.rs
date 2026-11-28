@@ -55,7 +55,7 @@ pub fn comment_style(path: &Path) -> Option<CommentStyle> {
         "rs" | "go" | "jsonc" | "c" | "h" | "cc" | "cpp" | "cxx" | "hpp" | "hh" | "hxx" | "cs"
         | "java" | "kt" | "kts" | "swift" | "scala" | "dart" | "php" | "js" | "jsx" | "mjs"
         | "cjs" | "ts" | "mts" | "cts" | "tsx" | "m" | "mm" => Some(CommentStyle { line: "//" }),
-        "sql" | "lua" => Some(CommentStyle { line: "--" }),
+        "sql" | "lua" | "hs" | "lhs" => Some(CommentStyle { line: "--" }),
         "sh" | "bash" | "zsh" | "brush" | "fish" | "py" | "toml" | "yaml" | "yml" | "mk" | "rb"
         | "rake" | "gemspec" => Some(CommentStyle { line: "#" }),
         _ => None,
@@ -161,6 +161,10 @@ mod tests {
         assert_eq!(
             comment_style(Path::new("Cargo.toml")),
             Some(CommentStyle { line: "#" })
+        );
+        assert_eq!(
+            comment_style(Path::new("src/Main.hs")),
+            Some(CommentStyle { line: "--" })
         );
         assert_eq!(comment_style(Path::new("data.json")), None);
         assert_eq!(comment_style(Path::new("notes.md")), None);

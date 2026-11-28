@@ -94,6 +94,14 @@ static GO: LazyLock<SyntaxLanguage> = LazyLock::new(|| {
         false,
     )
 });
+#[cfg(feature = "haskell")]
+static HASKELL: LazyLock<SyntaxLanguage> = LazyLock::new(|| {
+    SyntaxLanguage::grammar(
+        Language::new(tree_sitter_haskell::LANGUAGE),
+        tree_sitter_haskell::HIGHLIGHTS_QUERY,
+        false,
+    )
+});
 static BASH: LazyLock<SyntaxLanguage> = LazyLock::new(|| {
     SyntaxLanguage::grammar(
         Language::new(tree_sitter_bash::LANGUAGE),
@@ -612,6 +620,13 @@ fn is_scope_kind(kind: &str) -> bool {
             | "class_declaration"
             | "method_definition"
             | "interface_declaration"
+            | "function"
+            | "signature"
+            | "data_type"
+            | "newtype"
+            | "type_synonym"
+            | "class"
+            | "instance"
             | "atx_heading"
             | "setext_heading"
     )
@@ -802,6 +817,8 @@ fn child_kind<'tree>(
 fn language_for_tag(tag: &str) -> Option<&'static SyntaxLanguage> {
     match tag.to_ascii_lowercase().as_str() {
         "rust" | "rs" => Some(&*RUST),
+        #[cfg(feature = "haskell")]
+        "haskell" | "hs" => Some(&*HASKELL),
         "go" | "golang" => Some(&*GO),
         "bash" | "sh" | "shell" | "zsh" | "brush" => Some(&*BASH),
         "fish" => Some(&*FISH),
@@ -961,6 +978,8 @@ fn language_for(path: &Path) -> Option<&'static SyntaxLanguage> {
         "go" => Some(&*GO),
         "sh" | "bash" | "zsh" | "brush" => Some(&*BASH),
         "fish" => Some(&*FISH),
+        #[cfg(feature = "haskell")]
+        "hs" => Some(&*HASKELL),
         "py" => Some(&*PYTHON),
         #[cfg(feature = "lua")]
         "lua" => Some(&*LUA),
@@ -1133,6 +1152,30 @@ mod tests {
     #[test]
     fn lua_extension_is_absent_without_feature() {
         assert!(language_for(Path::new("init.lua")).is_none());
+    }
+
+    #[cfg(feature = "haskell")]
+    #[test]
+    fn haskell_extension_tag_and_highlights() {
+        assert!(language_for(Path::new("Main.hs")).is_some());
+        assert!(language_for_tag("haskell").is_some());
+        assert!(language_for_tag("hs").is_some());
+        let source = "module Main where\n-- note\ngreet :: String -> String\ngreet name = \"hi \" ++ name\ndata User = User { name :: String }\n";
+        let highlights = parse_source(source, Path::new("Main.hs")).expect("parse haskell");
+        assert!(highlights.iter().any(|h| h.class == SyntaxClass::Comment));
+        assert!(highlights.iter().any(|h| h.class == SyntaxClass::Keyword));
+        assert!(highlights.iter().any(|h| h.class == SyntaxClass::Type));
+        assert!(highlights.iter().any(|h| h.class == SyntaxClass::String));
+        let scopes = parse_scopes(source, Path::new("Main.hs")).expect("haskell scopes");
+        assert!(scopes.iter().any(|scope| scope.label == "greet"));
+        assert!(scopes.iter().any(|scope| scope.label == "User"));
+    }
+
+    #[cfg(not(feature = "haskell"))]
+    #[test]
+    fn haskell_extension_is_absent_without_feature() {
+        assert!(language_for(Path::new("Main.hs")).is_none());
+        assert!(language_for_tag("haskell").is_none());
     }
 
     #[test]

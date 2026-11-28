@@ -32,10 +32,10 @@ Build-host ISA/glibc, user-vs-root, and cgroup findings are recorded in
 
 Language servers are not bundled. Install the servers you want on `PATH`:
 `rust-analyzer`, `gopls`, `pyright`/`pylsp`, `typescript-language-server` or
-`vtsls`, `clangd`, `jdtls`, `lua-language-server`,
-`vscode-json-language-server`, `yaml-language-server`,
-`bash-language-server`, `marksman`, `taplo`, `vscode-html-language-server`,
-`vscode-css-language-server`, and/or `zls`.
+`vtsls`, `clangd`, `jdtls`, `haskell-language-server-wrapper`,
+`lua-language-server`, `vscode-json-language-server`,
+`yaml-language-server`, `bash-language-server`, `marksman`, `taplo`,
+`vscode-html-language-server`, `vscode-css-language-server`, and/or `zls`.
 
 ## Build
 
@@ -48,7 +48,7 @@ GOTOOLCHAIN=go1.27.4 go build -o target/release/anvil-exec-runner ./go/cmd/anvil
 ```
 
 The default `anvil` composition is standard/Git-only. For a local full build
-that activates every official module and the web/C/C++/Lua syntax grammars:
+that activates every official module and the web/Haskell/C/C++/Lua syntax grammars:
 
 ```bash
 cargo build --release -p anvil-distro-standard --features full \

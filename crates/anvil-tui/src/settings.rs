@@ -216,6 +216,7 @@ pub(crate) fn language_id_for_path(path: &Path) -> Option<&'static str> {
     {
         Some("rs") => Some("rust"),
         Some("go") => Some("go"),
+        Some("hs" | "lhs") => Some("haskell"),
         Some("md" | "markdown") => Some("markdown"),
         Some("py") => Some("python"),
         Some("ts" | "tsx") => Some("typescript"),

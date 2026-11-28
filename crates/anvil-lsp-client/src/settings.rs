@@ -107,6 +107,21 @@ where
             "gopls",
             "ANVIL_LSP_GO",
         ),
+        "hs" | "lhs" => (
+            vec!["haskell-language-server-wrapper", "haskell-language-server"],
+            vec!["--lsp".to_owned()],
+            "haskell",
+            vec![
+                "hie.yaml",
+                "cabal.project",
+                "cabal.project.local",
+                "stack.yaml",
+                "package.yaml",
+                "flake.nix",
+            ],
+            "haskell language server",
+            "ANVIL_LSP_HASKELL",
+        ),
         "py" | "pyi" => (
             vec!["pyright-langserver", "basedpyright-langserver", "pylsp"],
             Vec::new(),
@@ -611,6 +626,26 @@ mod tests {
         let java = lsp_settings(Path::new("Main.java")).expect("jdtls");
         assert!(java.tool.ends_with("jdtls"));
         assert_eq!(java.language_id, "java");
+    }
+
+    #[test]
+    fn haskell_files_use_the_hls_profile() {
+        let settings = lsp_settings_with_service(Path::new("Main.hs"), None, |language_id, _| {
+            (language_id == "haskell")
+                .then(|| ("haskell-language-server-wrapper".to_owned(), Vec::new()))
+        })
+        .expect("haskell settings");
+        assert_eq!(settings.tool, "haskell-language-server-wrapper");
+        assert_eq!(settings.language_id, "haskell");
+        assert!(settings.root_markers.contains(&"hie.yaml".to_owned()));
+        assert!(settings.root_markers.contains(&"stack.yaml".to_owned()));
+        assert!(
+            lsp_settings_with_service(Path::new("Main.lhs"), None, |language_id, _| {
+                (language_id == "haskell")
+                    .then(|| ("haskell-language-server-wrapper".to_owned(), Vec::new()))
+            })
+            .is_some()
+        );
     }
 
     #[test]
