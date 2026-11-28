@@ -666,9 +666,9 @@ dependencies = [
 
 [[package]]
 name = "codebook-tree-sitter-typst"
-version = "0.12.1"
+version = "0.12.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7f785ad90ce80edd9e8b3d00890af0bc163e9a2c38f03daa18aede98d343d093"
+checksum = "40918ed1fdd3c0643230969a0dc204ee41b0d928a1d4d12fab5c29d3f0986429"
 dependencies = [
  "cc",
  "tree-sitter-language",
@@ -2406,7 +2406,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.4.3",
+ "getrandom 0.3.4",
  "once_cell",
  "rustix",
  "windows-sys",
