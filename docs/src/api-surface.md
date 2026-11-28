@@ -71,6 +71,12 @@ gateway internals beyond the versioned protocol.
   checker and run `cargo semver-checks check-release --baseline-rev origin/main`.
 
 ## Migration notes
+### Editor text deltas
+
+`anvil-editor::EditDelta` and `EditorState::text_edits_since` are additive
+kernel APIs. They expose applied text mutations for view remapping; existing
+editor and session signatures are unchanged.
+
 
 ### ADR-0077: benchmark-only text backends
 
