@@ -85,22 +85,129 @@ impl View {
     }
 
     pub(crate) fn remap_offsets(&mut self, old: &str, new: &str) {
-        let Some((start, old_end, new_end)) = changed_span(old, new) else {
+        let Some(mapping) = OffsetMap::between(old, new) else {
             return;
         };
-        let inserted = new_end - start;
         if self.selections.is_empty() {
             self.selections.push((self.cursor, self.cursor));
         }
         for (anchor, head) in &mut self.selections {
-            *anchor = map_offset(*anchor, start, old_end, inserted);
-            *head = map_offset(*head, start, old_end, inserted);
+            *anchor = mapping.map(*anchor);
+            *head = mapping.map(*head);
         }
         self.cursor = self.selections.first().map_or(0, |(_, head)| *head);
-        self.visual_anchor = self
-            .visual_anchor
-            .map(|anchor| map_offset(anchor, start, old_end, inserted));
+        self.visual_anchor = self.visual_anchor.map(|anchor| mapping.map(anchor));
     }
+}
+
+enum OffsetMap {
+    Insertions(Vec<(usize, usize)>),
+    Deletions(Vec<(usize, usize)>),
+    Span {
+        start: usize,
+        old_end: usize,
+        inserted: usize,
+    },
+}
+
+impl OffsetMap {
+    fn between(old: &str, new: &str) -> Option<Self> {
+        if old == new {
+            return None;
+        }
+        if let Some(edits) = insertion_edits(old, new) {
+            return Some(Self::Insertions(edits));
+        }
+        if let Some(edits) = deletion_edits(old, new) {
+            return Some(Self::Deletions(edits));
+        }
+        let (start, old_end, new_end) = changed_span(old, new)?;
+        let old_middle = &old.as_bytes()[start..old_end];
+        let new_middle = &new.as_bytes()[start..new_end];
+        let mut seen = [false; 256];
+        for byte in new_middle {
+            seen[*byte as usize] = true;
+        }
+        if old_middle.iter().any(|byte| seen[*byte as usize]) {
+            return None;
+        }
+        Some(Self::Span {
+            start,
+            old_end,
+            inserted: new_end - start,
+        })
+    }
+
+    fn map(&self, offset: usize) -> usize {
+        match self {
+            Self::Insertions(edits) => {
+                offset
+                    + edits
+                        .iter()
+                        .filter(|(at, _)| offset >= *at)
+                        .map(|(_, len)| *len)
+                        .sum::<usize>()
+            }
+            Self::Deletions(edits) => {
+                let mut removed = 0;
+                for (start, end) in edits {
+                    if offset < *start {
+                        break;
+                    }
+                    if offset <= *end {
+                        return start - removed;
+                    }
+                    removed += end - start;
+                }
+                offset - removed
+            }
+            Self::Span {
+                start,
+                old_end,
+                inserted,
+            } => map_offset(offset, *start, *old_end, *inserted),
+        }
+    }
+}
+
+fn insertion_edits(old: &str, new: &str) -> Option<Vec<(usize, usize)>> {
+    let new = new.as_bytes();
+    let mut edits = Vec::new();
+    let mut next = 0;
+    for (at, byte) in old.bytes().enumerate() {
+        let found = next
+            + new[next..]
+                .iter()
+                .position(|candidate| *candidate == byte)?;
+        if found > next {
+            edits.push((at, found - next));
+        }
+        next = found + 1;
+    }
+    if next < new.len() {
+        edits.push((old.len(), new.len() - next));
+    }
+    Some(edits)
+}
+
+fn deletion_edits(old: &str, new: &str) -> Option<Vec<(usize, usize)>> {
+    let old = old.as_bytes();
+    let mut edits = Vec::new();
+    let mut next = 0;
+    for byte in new.bytes() {
+        let found = next
+            + old[next..]
+                .iter()
+                .position(|candidate| *candidate == byte)?;
+        if found > next {
+            edits.push((next, found));
+        }
+        next = found + 1;
+    }
+    if next < old.len() {
+        edits.push((next, old.len()));
+    }
+    Some(edits)
 }
 
 fn changed_span(old: &str, new: &str) -> Option<(usize, usize, usize)> {
