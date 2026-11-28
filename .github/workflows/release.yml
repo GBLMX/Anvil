@@ -85,7 +85,7 @@ jobs:
           subject-path: ${{ runner.temp }}/anvil-*-linux-x86_64-inputs.tar.gz
 
       - name: Upload unsigned build inputs
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: anvil-${{ github.ref_name }}-build-inputs
           if-no-files-found: error
