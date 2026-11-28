@@ -100,14 +100,12 @@ impl Model {
         self.buffers.active_id = document.id;
         self.session.editor = document.session;
         self.session.path = document.path;
-        self.session.cursor = saved.cursor;
+        self.restore_view_selections(&saved);
         self.view.scroll = saved.scroll;
         self.view.hscroll = saved.hscroll;
         self.file.modified = document.modified;
         self.file.missing = document.missing;
-        self.edit.visual_anchor = saved.visual_anchor;
         self.edit.visual_line = saved.visual_line;
-        self.search.query = saved.search_query;
         self.syntax_cache.highlights.borrow_mut().switch_path_with(
             self.session.path.as_deref(),
             false,

@@ -21,12 +21,16 @@ impl Model {
         self.view.split_orientation = orientation;
         self.buffers.split_left = Some(self.buffers.active);
         let document = self.buffers.active_id;
+        let selections = self.current_selections();
         let active = self.buffers.entries.get(self.buffers.active);
         self.buffers.split = Some(Pane {
             buffer: View {
                 id: ViewId::next(),
                 document,
-                cursor: self.session.cursor,
+                cursor: selections
+                    .first()
+                    .map_or(self.session.cursor, |(_, head)| *head),
+                selections,
                 scroll: self.view.scroll,
                 hscroll: self.view.hscroll,
                 visual_anchor: self.edit.visual_anchor,
@@ -51,13 +55,12 @@ impl Model {
         };
         self.session.editor = document.session;
         self.session.path = document.path;
-        self.session.cursor = view.cursor.min(self.session.editor.text().len_bytes());
         self.view.scroll = view.scroll;
         self.view.hscroll = view.hscroll;
         self.file.modified = document.modified;
         self.file.missing = document.missing;
-        self.edit.visual_anchor = view.visual_anchor;
         self.edit.visual_line = view.visual_line;
+        self.restore_view_selections(view);
         self.search.query = view.search_query.clone();
         self.search.state.reset_for_buffer();
         self.buffers.active_id = view.document;

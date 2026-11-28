@@ -33,6 +33,8 @@ struct SessionFile {
 struct SessionBuffer {
     path: Option<PathBuf>,
     cursor: usize,
+    #[serde(default)]
+    selections: Vec<(usize, usize)>,
     scroll: usize,
     hscroll: usize,
     modified: bool,
@@ -238,10 +240,17 @@ fn restore_buffer(
         missing: path.as_ref().is_some_and(|path| !path.is_file()),
         syntax: Default::default(),
     };
+    let selections = if saved.selections.is_empty() {
+        vec![(saved.cursor, saved.cursor)]
+    } else {
+        saved.selections.clone()
+    };
+    let cursor = selections.first().map_or(saved.cursor, |(_, head)| *head);
     let view = View {
         id: ViewId::next(),
         document: id,
-        cursor: saved.cursor,
+        cursor,
+        selections,
         scroll: saved.scroll,
         hscroll: saved.hscroll,
         visual_anchor: None,
@@ -362,6 +371,7 @@ pub(crate) fn save(model: &mut Model, workspace: &Path) -> Result<(), String> {
         saved.push(SessionBuffer {
             path: document.path.clone(),
             cursor: view.cursor,
+            selections: view.selections.clone(),
             scroll: view.scroll,
             hscroll: view.hscroll,
             modified: document.modified,
@@ -402,6 +412,7 @@ pub(crate) fn save(model: &mut Model, workspace: &Path) -> Result<(), String> {
         Some(SessionBuffer {
             path: document.path.clone(),
             cursor: view.cursor,
+            selections: view.selections.clone(),
             scroll: view.scroll,
             hscroll: view.hscroll,
             modified: document.modified,
@@ -645,6 +656,13 @@ mod tests {
         model.focus_split(true);
         model.open_path(&right).expect("open right");
         model.insert_text("dirty");
+        assert!(
+            model
+                .session
+                .editor
+                .try_set_selections_bytes(vec![(0, 2), (3, 5)])
+                .is_ok()
+        );
         save(&mut model, &workspace).expect("save");
 
         let mut restored = Model::new(EditorState::from_text(""), None);
@@ -653,6 +671,10 @@ mod tests {
         assert!(restored.ui.focus.split);
         assert!(restored.file.modified);
         assert_eq!(restored.session.editor.text().slice(0..5), "dirty");
+        assert_eq!(
+            restored.session.editor.selection_bytes(),
+            vec![(0, 2), (3, 5)]
+        );
         assert_eq!(restored.session.path.as_deref(), Some(right.as_path()));
         assert_eq!(
             restored

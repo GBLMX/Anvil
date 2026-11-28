@@ -109,6 +109,9 @@ post-`0.5.0` feature line.
   and plan review freshness.
 
 ### Fixed
+- Split views preserve independent multi-cursor selections, remap them when
+  the shared document is edited in the other pane, and persist them with the
+  workspace session.
 - Insert-mode completion now triggers on the language server's advertised
   `triggerCharacters` (and `/` for path completion), sends trigger-character
   and incomplete-list request contexts, re-requests truncated lists while
